@@ -14,6 +14,27 @@ type Props = {
   className?: string;
 };
 
+// Mounts its children only while near the visible area of the window.
+// The wrapper keeps its size (set via className) so the layout doesn't jump.
+export function LazyMount({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => setNear(entry.isIntersecting), { rootMargin: "100% 0px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={className}>
+      {near && children}
+    </div>
+  );
+}
+
 // A page-sized slot that only renders (and keeps in memory) its canvas while
 // near the visible area, so long documents stay fast.
 export function LazyPage({ pdf, pageNumber, width, height, root, className }: Props) {

@@ -34,6 +34,7 @@ function actionLabel(tool: Tool) {
   if (tool.slug === "edit-pdf") return "Open in editor";
   if (tool.slug === "ai-extraction") return "Extract data";
   if (tool.slug === "ai-assistant") return "Start chat";
+  if (tool.slug === "organise-pages") return "Save new PDF";
   return tool.name;
 }
 

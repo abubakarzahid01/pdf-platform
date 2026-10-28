@@ -178,6 +178,8 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
           <Segmented options={["Remove white margins", "Select area"]} value={text("mode")} onChange={set("mode")} />
         </Field>
       );
+    case "organise-pages":
+      return <p className="text-sm text-muted">Arrange the pages on the left, then save. Your original file isn&apos;t changed.</p>;
     case "merge-pdf":
       return <p className="text-sm text-muted">Files are combined in the order shown. Use the arrows to change the order.</p>;
     default:

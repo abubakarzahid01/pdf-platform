@@ -16,6 +16,8 @@ import { SelectedFiles, type FileItemStatus } from "@/components/selected-files"
 import { ToolOptions, optionDefaults, type OptionValues } from "@/components/tool/tool-options";
 import { FilePreview } from "@/components/tool/file-preview";
 import { ToolResult } from "@/components/tool/tool-result";
+import { PageOrganiser, defaultPlan } from "@/components/tool/page-organiser";
+import type { PagePlan } from "@/lib/pdf/operations/organize";
 
 type Props = {
   slug: string;
@@ -40,6 +42,8 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [outputs, setOutputs] = useState<OutputFile[] | null>(null);
+  // Organise pages: the edited page list, tied to the file it was made for.
+  const [pagePlan, setPagePlan] = useState<{ itemId: number; pages: PagePlan } | null>(null);
   const itemsRef = useRef(items);
   const removedIds = useRef(new Set<number>());
 
@@ -122,6 +126,10 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   const enoughFiles = valid.length >= minimumFiles(slug);
   const canAct = (opensEditor || runnable) && enoughFiles && !checking && errors === 0 && !running;
 
+  const organising = slug === "organise-pages" && !!firstValid?.pdf && !!firstValid.pageCount;
+  const plan =
+    firstValid && pagePlan?.itemId === firstValid.id ? pagePlan.pages : defaultPlan(firstValid?.pageCount ?? 0);
+
   function openInEditor() {
     if (!firstValid?.pdf || !firstValid.pageCount) return;
     // Hand the open document to the editor; this page must no longer close it.
@@ -137,7 +145,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
       const inputs = await Promise.all(
         valid.map(async (i) => ({ name: i.file.name, bytes: new Uint8Array(await i.file.arrayBuffer()) })),
       );
-      setOutputs(await runTool(slug, inputs, options));
+      setOutputs(await runTool(slug, inputs, { ...options, plan }));
     } catch (error) {
       setRunError(error instanceof OperationError ? error.message : "Something went wrong while processing. Your file may use features we can't handle yet.");
     } finally {
@@ -185,7 +193,19 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
                 Start over
               </button>
             </div>
-            {firstValid && <FilePreview item={firstValid} showsFirstOf={items.length > 1} />}
+            {organising ? (
+              <PageOrganiser
+                pdf={firstValid.pdf!}
+                pageCount={firstValid.pageCount!}
+                plan={plan}
+                onChange={(pages) => {
+                  invalidate();
+                  setPagePlan({ itemId: firstValid.id, pages });
+                }}
+              />
+            ) : (
+              firstValid && <FilePreview item={firstValid} showsFirstOf={items.length > 1} />
+            )}
           </>
         ) : (
           <FileDropzone

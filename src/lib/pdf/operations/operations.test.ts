@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { mergePdfs } from "./merge";
+import { organizePdf } from "./organize";
 import { parsePageRanges, rangesToIndices } from "./page-ranges";
 import { rotatePdf } from "./rotate";
 import { splitPdf } from "./split";
@@ -97,6 +98,32 @@ describe("splitPdf", () => {
 
   it("reports invalid page selections", async () => {
     await expect(splitPdf(fixture("sample-3-pages.pdf"), "ranges", "1-9")).rejects.toThrow("Page 9 doesn't exist");
+  });
+});
+
+describe("organizePdf", () => {
+  it("reorders, deletes and rotates pages in one pass", async () => {
+    // mixed-sizes: [A4 portrait, A4 landscape, Letter rotated 90]
+    const result = await organizePdf(fixture("mixed-sizes.pdf"), [
+      { source: 2, rotate: 270 },
+      { source: 0, rotate: 90 },
+    ]);
+    const doc = await open(result.bytes);
+    expect(result.name).toBe("mixed-sizes-organised.pdf");
+    expect(doc.getPageCount()).toBe(2);
+    expect(sizes(doc)).toEqual(["612x792", "595x842"]);
+    expect(doc.getPages().map((p) => p.getRotation().angle)).toEqual([0, 90]);
+  });
+
+  it("keeps everything unchanged when nothing is edited", async () => {
+    const doc = await open((await organizePdf(fixture("sample-3-pages.pdf"), [0, 1, 2].map((source) => ({ source, rotate: 0 })))).bytes);
+    expect(doc.getPageCount()).toBe(3);
+    expect(doc.getPages().map((p) => p.getRotation().angle)).toEqual([0, 0, 0]);
+  });
+
+  it("refuses an empty document and invalid page references", async () => {
+    await expect(organizePdf(fixture("sample-3-pages.pdf"), [])).rejects.toThrow("at least one page");
+    await expect(organizePdf(fixture("sample-3-pages.pdf"), [{ source: 3, rotate: 0 }])).rejects.toThrow("doesn't match");
   });
 });
 
