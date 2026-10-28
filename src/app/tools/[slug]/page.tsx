@@ -23,6 +23,12 @@ export async function generateMetadata({ params }: PageProps<"/tools/[slug]">): 
   };
 }
 
+// Tools with a full workspace screen link to its preview.
+const workspacePreviews: Record<string, { href: string; title: string; text: string; cta: string }> = {
+  "edit-pdf": { href: "/editor", title: "Preview the editor", text: "see the editing workspace with a sample document.", cta: "Open editor" },
+  "ai-extraction": { href: "/extract", title: "Preview the review screen", text: "see extracted invoice data with sample files.", cta: "Open preview" },
+};
+
 function actionLabel(tool: Tool) {
   if (tool.category === "convert-to") return "Convert to PDF";
   if (tool.category === "convert-from") return "Convert";
@@ -66,6 +72,7 @@ async function ToolContent({ params }: { params: PageProps<"/tools/[slug]">["par
   const input = getInputSpec(tool.slug);
   const category = categories.find((c) => c.id === tool.category);
   const related = getRelatedTools(tool);
+  const workspacePreview = workspacePreviews[tool.slug];
 
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-7 px-4 pb-16 pt-8 sm:px-8">
@@ -87,16 +94,16 @@ async function ToolContent({ params }: { params: PageProps<"/tools/[slug]">["par
         <p className="max-w-[720px] text-[17px] text-muted">{tool.description}</p>
       </div>
 
-      {tool.slug === "edit-pdf" && (
+      {workspacePreview && (
         <Link
-          href="/editor"
+          href={workspacePreview.href}
           className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand-ring bg-brand-soft px-5 py-4 text-ink hover:border-brand"
         >
           <span className="text-[15px]">
-            <strong className="font-semibold">Preview the editor</strong>
-            <span className="text-muted"> — see the editing workspace with a sample document.</span>
+            <strong className="font-semibold">{workspacePreview.title}</strong>
+            <span className="text-muted"> — {workspacePreview.text}</span>
           </span>
-          <span className="text-sm font-semibold text-brand-strong">Open editor →</span>
+          <span className="text-sm font-semibold text-brand-strong">{workspacePreview.cta} →</span>
         </Link>
       )}
 
