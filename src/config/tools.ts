@@ -96,3 +96,25 @@ export const popularTools = tools.filter((t) => t.popular);
 export function getTool(slug: string) {
   return tools.find((t) => t.slug === slug);
 }
+
+// What each tool accepts. `accept` only filters the file picker; real validation
+// of file contents happens on upload (Phase 3), never trusting the extension alone.
+export type InputSpec = { accept: string; label: string; multiple: boolean };
+
+const inputSpecs: Record<string, Omit<InputSpec, "multiple">> = {
+  "word-to-pdf": { accept: ".doc,.docx,.odt,.rtf,.txt", label: "DOC, DOCX, ODT, RTF or TXT" },
+  "excel-to-pdf": { accept: ".xls,.xlsx,.ods", label: "XLS, XLSX or ODS" },
+  "powerpoint-to-pdf": { accept: ".ppt,.pptx,.odp", label: "PPT, PPTX or ODP" },
+  "images-to-pdf": { accept: ".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff", label: "JPG, PNG, WEBP and other images" },
+};
+
+const multiFileTools = new Set(["merge-pdf", "images-to-pdf", "ai-extraction"]);
+
+export function getInputSpec(slug: string): InputSpec {
+  const spec = inputSpecs[slug] ?? { accept: ".pdf,application/pdf", label: "PDF" };
+  return { ...spec, multiple: multiFileTools.has(slug) };
+}
+
+export function getRelatedTools(tool: Tool, count = 3) {
+  return tools.filter((t) => t.category === tool.category && t.slug !== tool.slug).slice(0, count);
+}
