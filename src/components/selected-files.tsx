@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Loader2, X } from "lucide-react";
 
 export function formatSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -20,9 +20,14 @@ type Props = {
   // Optional check status per file, same order as `files`.
   statuses?: FileItemStatus[];
   onRemove?: (index: number) => void;
+  // When given, shows up/down buttons to reorder files.
+  onMove?: (index: number, direction: -1 | 1) => void;
 };
 
-export function SelectedFiles({ files, statuses, onRemove }: Props) {
+const smallButton =
+  "flex size-8 shrink-0 items-center justify-center rounded-lg text-subtle hover:bg-surface hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent";
+
+export function SelectedFiles({ files, statuses, onRemove, onMove }: Props) {
   return (
     <ul className="flex flex-col gap-2">
       {files.map((f, i) => {
@@ -49,6 +54,16 @@ export function SelectedFiles({ files, statuses, onRemove }: Props) {
             {status?.state === "checking" && <Loader2 className="size-4 shrink-0 animate-spin text-subtle" aria-label="Checking file" />}
             {status?.state === "ok" && <CheckCircle2 className="size-4 shrink-0 text-success" aria-label="File is valid" />}
             {isError && <AlertCircle className="size-4 shrink-0 text-danger" aria-hidden="true" />}
+            {onMove && (
+              <span className="flex shrink-0">
+                <button type="button" onClick={() => onMove(i, -1)} disabled={i === 0} aria-label={`Move ${f.name} up`} className={smallButton}>
+                  <ChevronUp className="size-4" aria-hidden="true" />
+                </button>
+                <button type="button" onClick={() => onMove(i, 1)} disabled={i === files.length - 1} aria-label={`Move ${f.name} down`} className={smallButton}>
+                  <ChevronDown className="size-4" aria-hidden="true" />
+                </button>
+              </span>
+            )}
             {onRemove && (
               <button
                 type="button"

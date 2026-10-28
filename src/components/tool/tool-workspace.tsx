@@ -2,16 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { limits } from "@/config/site";
 import type { InputSpec } from "@/config/tools";
 import { checkFile } from "@/lib/files/check-file";
 import { setPendingDocument } from "@/lib/files/pending-document";
 import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
+import { OperationError, baseName, type OutputFile } from "@/lib/pdf/operations/types";
+import { minimumFiles, runTool, runnableTools } from "@/lib/tools/run-tool";
 import { FileDropzone } from "@/components/file-dropzone";
 import { PrototypeBadge } from "@/components/prototype-badge";
 import { SelectedFiles, type FileItemStatus } from "@/components/selected-files";
-import { ToolOptions } from "@/components/tool/tool-options";
+import { ToolOptions, optionDefaults, type OptionValues } from "@/components/tool/tool-options";
 import { FilePreview } from "@/components/tool/file-preview";
+import { ToolResult } from "@/components/tool/tool-result";
 
 type Props = {
   slug: string;
@@ -32,6 +36,10 @@ let nextId = 1;
 export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<CheckedItem[]>([]);
+  const [options, setOptions] = useState<OptionValues>(() => optionDefaults[slug] ?? {});
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [outputs, setOutputs] = useState<OutputFile[] | null>(null);
   const itemsRef = useRef(items);
   const removedIds = useRef(new Set<number>());
 
@@ -44,12 +52,19 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
     return () => itemsRef.current.forEach((item) => closePdf(item.pdf));
   }, []);
 
+  // Any change to files or options makes an earlier result out of date.
+  function invalidate() {
+    setOutputs(null);
+    setRunError(null);
+  }
+
   function discard(item: CheckedItem) {
     removedIds.current.add(item.id);
     closePdf(item.pdf);
   }
 
   function addFiles(files: File[]) {
+    invalidate();
     const added: CheckedItem[] = files.map((file) => ({ id: nextId++, file, status: { state: "checking" } }));
     if (!input.multiple) itemsRef.current.forEach(discard);
     setItems((prev) => (input.multiple ? [...prev, ...added] : added));
@@ -73,19 +88,39 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   }
 
   function removeAt(index: number) {
+    invalidate();
     const item = items[index];
     if (item) discard(item);
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function move(index: number, direction: -1 | 1) {
+    invalidate();
+    setItems((prev) => {
+      const next = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function reset() {
+    invalidate();
+    items.forEach(discard);
+    setItems([]);
+  }
+
   const hasFiles = items.length > 0;
   const checking = items.some((i) => i.status.state === "checking");
   const errors = items.filter((i) => i.status.state === "error").length;
-  const firstValid = items.find((i) => i.status.state === "ok");
+  const valid = items.filter((i) => i.status.state === "ok");
+  const firstValid = valid[0];
 
-  // Edit PDF is the first tool with a working action: it opens the editor.
   const opensEditor = slug === "edit-pdf";
-  const canAct = opensEditor && !!firstValid?.pdf && !checking && errors === 0;
+  const runnable = runnableTools.has(slug);
+  const enoughFiles = valid.length >= minimumFiles(slug);
+  const canAct = (opensEditor || runnable) && enoughFiles && !checking && errors === 0 && !running;
 
   function openInEditor() {
     if (!firstValid?.pdf || !firstValid.pageCount) return;
@@ -95,18 +130,41 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
     router.push("/editor");
   }
 
+  async function run() {
+    setRunning(true);
+    setRunError(null);
+    try {
+      const inputs = await Promise.all(
+        valid.map(async (i) => ({ name: i.file.name, bytes: new Uint8Array(await i.file.arrayBuffer()) })),
+      );
+      setOutputs(await runTool(slug, inputs, options));
+    } catch (error) {
+      setRunError(error instanceof OperationError ? error.message : "Something went wrong while processing. Your file may use features we can't handle yet.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   let note = "Add a file to get started.";
   if (checking) note = "Checking your files…";
   else if (errors > 0) note = `Remove the ${errors === 1 ? "file" : `${errors} files`} with problems to continue.`;
-  else if (canAct) note = "Your file stays in your browser. Nothing is uploaded.";
-  else if (hasFiles) note = "Files checked. Processing for this tool arrives in a later phase.";
+  else if (hasFiles && (opensEditor || runnable) && !enoughFiles) note = `Add at least ${minimumFiles(slug)} PDFs.`;
+  else if (canAct) note = "Your files stay in your browser. Nothing is uploaded.";
+  else if (hasFiles && !runnable && !opensEditor) note = "Files checked. Processing for this tool arrives in a later phase.";
 
   return (
     <div className="flex flex-wrap items-start gap-6">
       <section className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
-        {hasFiles ? (
+        {outputs ? (
+          <ToolResult outputs={outputs} zipName={`${baseName(firstValid?.file.name ?? "document")}-split.zip`} onBack={invalidate} onReset={reset} />
+        ) : hasFiles ? (
           <>
-            <SelectedFiles files={items.map((i) => i.file)} statuses={items.map((i) => i.status)} onRemove={removeAt} />
+            <SelectedFiles
+              files={items.map((i) => i.file)}
+              statuses={items.map((i) => i.status)}
+              onRemove={removeAt}
+              onMove={slug === "merge-pdf" ? move : undefined}
+            />
             <div className="flex flex-wrap gap-4">
               {input.multiple && (
                 <label className="cursor-pointer text-sm font-semibold text-brand-strong hover:text-brand">
@@ -123,14 +181,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
                   />
                 </label>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  items.forEach(discard);
-                  setItems([]);
-                }}
-                className="text-sm font-semibold text-subtle hover:text-ink"
-              >
+              <button type="button" onClick={reset} className="text-sm font-semibold text-subtle hover:text-ink">
                 Start over
               </button>
             </div>
@@ -149,20 +200,35 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
       <aside className="flex w-full max-w-[400px] flex-[1_1_340px] flex-col gap-5 rounded-panel border border-line bg-surface p-6 shadow-[0_12px_32px_rgb(21_19_43/0.06)]">
         <div className="flex items-center justify-between">
           <strong className="font-display text-[17px]">Options</strong>
-          {!opensEditor && <PrototypeBadge />}
+          {!opensEditor && !runnable && <PrototypeBadge />}
         </div>
-        <ToolOptions slug={slug} />
+        <ToolOptions
+          slug={slug}
+          values={options}
+          pageCount={firstValid?.pageCount}
+          onChange={(key, value) => {
+            invalidate();
+            setOptions((prev) => ({ ...prev, [key]: value }));
+          }}
+        />
         <button
           type="button"
           disabled={!canAct}
-          onClick={openInEditor}
-          className="rounded-xl bg-brand py-[15px] text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={opensEditor ? openInEditor : run}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-[15px] text-base font-semibold text-white hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {actionLabel}
+          {running && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {running ? "Working…" : actionLabel}
         </button>
-        <span role="status" className={`text-center text-xs ${errors > 0 ? "text-danger" : "text-subtle"}`}>
-          {note}
-        </span>
+        {runError ? (
+          <p role="alert" className="rounded-xl border border-danger/25 bg-danger-soft px-3 py-2.5 text-sm text-danger">
+            {runError}
+          </p>
+        ) : (
+          <span role="status" className={`text-center text-xs ${errors > 0 ? "text-danger" : "text-subtle"}`}>
+            {note}
+          </span>
+        )}
       </aside>
     </div>
   );

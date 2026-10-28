@@ -12,6 +12,7 @@ Requirements: Node.js 20+ (developed on 22) and npm.
 npm install      # first time only
 npm run dev      # start at http://localhost:3000
 npm run lint     # check code for mistakes
+npm test         # run automated tests on real PDF outputs
 npm run build    # production build (run before committing larger changes)
 ```
 
@@ -73,7 +74,9 @@ Every significant library must be safe for commercial, closed-source use.
 | Styling | Tailwind CSS | MIT | ✅ installed |
 | Icons | lucide-react | ISC | ✅ installed |
 | PDF rendering | PDF.js (`pdfjs-dist` 6) | Apache-2.0 | ✅ installed (Phase 3) |
-| PDF manipulation | pdf-lib | MIT | ✅ installed (test files now, tools in Phase 4) |
+| PDF manipulation | pdf-lib | MIT | ✅ merge, split, rotate (Phase 4) |
+| ZIP downloads | fflate | MIT | ✅ installed |
+| Automated tests | Vitest | MIT | ✅ installed (dev only) |
 | Excel / CSV export | ExcelJS, PapaParse | MIT | Phase 6 |
 | Office → PDF | LibreOffice (headless, server) | MPL-2.0 | Conversion phase |
 | OCR | Tesseract | Apache-2.0 | Phase 6 |
