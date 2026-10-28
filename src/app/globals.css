@@ -1,26 +1,54 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+  Design tokens from the approved design canvas.
+  Use them as Tailwind classes, e.g. bg-brand, text-ink, border-line, text-muted.
+*/
+@theme {
+  /* Text */
+  --color-ink: #15132b;
+  --color-ink-soft: #3c3a52;
+  --color-muted: #55536b;
+  --color-subtle: #64627a;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Surfaces and borders */
+  --color-surface: #ffffff;
+  --color-surface-soft: #fafafd;
+  --color-canvas: #f4f4f8;
+  --color-line: #e7e6f0;
+  --color-line-soft: #eeedf4;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Brand accent (purple) */
+  --color-brand: #5a47e0;
+  --color-brand-strong: #4a38d1;
+  --color-brand-soft: #efecfd;
+  --color-brand-ring: #cfc8f7;
+
+  /* Informational (blue) */
+  --color-info: #2e6be6;
+  --color-info-strong: #1e3f86;
+  --color-info-soft: #eaf1fe;
+
+  /* Status: review / error / success */
+  --color-warn: #8a4b08;
+  --color-warn-soft: #fef3e2;
+  --color-danger: #9b1c1c;
+  --color-danger-soft: #fdecec;
+  --color-success: #166534;
+  --color-success-soft: #eaf7ee;
+
+  /* Typography (variables are set by next/font in layout.tsx) */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, sans-serif;
+
+  /* Shape and depth */
+  --radius-card: 1rem;
+  --radius-panel: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(21 19 43 / 0.04);
+  --shadow-raised: 0 1px 2px rgb(21 19 43 / 0.05), 0 20px 50px rgb(21 19 43 / 0.08);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
 }
