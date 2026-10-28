@@ -80,7 +80,9 @@ Every significant library must be safe for commercial, closed-source use.
 | Excel / CSV export | ExcelJS, PapaParse | MIT | Phase 6 |
 | Office → PDF | LibreOffice (headless, server) | MPL-2.0 | Conversion phase |
 | OCR | Tesseract | Apache-2.0 | Phase 6 |
-| Compression, passwords | qpdf + sharp | Apache-2.0 | Phase 4 |
+| Compression | pdf-lib + browser canvas (image recompression) | MIT | ✅ in the browser (Phase 4) |
+| Test images | jpeg-js | BSD-3-Clause | ✅ installed (dev only) |
+| Passwords; large-file compression | qpdf (server) | Apache-2.0 | Later |
 
 **Avoided:** Ghostscript and MuPDF are AGPL — using them in a web service would require
 publishing our source code, unless a commercial licence is bought. Revisit only if needed.

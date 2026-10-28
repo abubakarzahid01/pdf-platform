@@ -29,7 +29,9 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
         <div className="flex items-center gap-3">
           <CheckCircle2 className="size-6 shrink-0 text-success" aria-hidden="true" />
           <div className="flex flex-col">
-            <strong className="text-[17px]">{single ? "Your PDF is ready" : `${outputs.length} PDFs are ready`}</strong>
+            <strong className="text-[17px]">
+              {single?.unchanged ? "No changes needed" : single ? "Your PDF is ready" : `${outputs.length} PDFs are ready`}
+            </strong>
             <span className="text-sm text-muted">
               {single
                 ? `${single.name} · ${single.pageCount} page${single.pageCount > 1 ? "s" : ""} · ${formatSize(single.bytes.length)}`
@@ -43,9 +45,11 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
           className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-white hover:bg-brand-strong"
         >
           <Download className="size-4" aria-hidden="true" />
-          {single ? "Download PDF" : "Download all (ZIP)"}
+          {single?.unchanged ? "Download original" : single ? "Download PDF" : "Download all (ZIP)"}
         </button>
       </div>
+
+      {single?.note && <p className="text-sm text-ink-soft">{single.note}</p>}
 
       {single ? (
         <ResultPreview output={single} />

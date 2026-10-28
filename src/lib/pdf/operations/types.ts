@@ -3,7 +3,9 @@
 
 export type InputPdf = { name: string; bytes: Uint8Array };
 
-export type OutputFile = { name: string; bytes: Uint8Array; pageCount: number };
+// `note` is an optional plain-language summary shown with the result.
+// `unchanged` marks an output that is the original file returned as-is.
+export type OutputFile = { name: string; bytes: Uint8Array; pageCount: number; note?: string; unchanged?: boolean };
 
 export class OperationError extends Error {
   constructor(message: string) {

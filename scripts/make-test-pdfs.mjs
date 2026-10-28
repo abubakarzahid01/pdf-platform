@@ -65,4 +65,38 @@ await writeFile(new URL("broken-truncated.pdf", out), normalBytes.slice(0, Math.
 // 5. Fake: plain text renamed to .pdf
 await writeFile(new URL("fake-text-file.pdf", out), "This is not a PDF. It is a text file with a .pdf name.\n");
 
+// 6. Image-heavy: a large high-quality JPEG and a large lossless (Flate) image, plus text.
+//    Used to test compression. Pixels are a smooth pattern with grain, like a photo.
+const jpeg = (await import("jpeg-js")).default;
+const UPNG = (await import("@pdf-lib/upng")).default.default; // bundled with pdf-lib (CommonJS export)
+
+function photoLike(width, height, seed) {
+  const data = new Uint8Array(width * height * 4);
+  let s = seed;
+  const rand = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const grain = (rand() - 0.5) * 40;
+      data[i] = 120 + 90 * Math.sin(x / 140) + grain;
+      data[i + 1] = 110 + 80 * Math.cos(y / 110) + grain;
+      data[i + 2] = 140 + 70 * Math.sin((x + y) / 200) + grain;
+      data[i + 3] = 255;
+    }
+  }
+  return data;
+}
+
+const heavy = await PDFDocument.create();
+const heavyFont = await heavy.embedFont(StandardFonts.Helvetica);
+const jpgBytes = jpeg.encode({ data: photoLike(2400, 1600, 1), width: 2400, height: 1600 }, 95).data;
+const pngBytes = UPNG.encode([photoLike(1300, 860, 2).buffer], 1300, 860, 0);
+const images = [await heavy.embedJpg(jpgBytes), await heavy.embedPng(new Uint8Array(pngBytes))];
+images.forEach((image, i) => {
+  const page = heavy.addPage(A4);
+  page.drawText(`Photo page ${i + 1}: text must stay sharp after compression`, { x: 50, y: 790, size: 14, font: heavyFont });
+  page.drawImage(image, { x: 50, y: 300, width: 495, height: 330 });
+});
+await writeFile(new URL("images-heavy.pdf", out), await heavy.save());
+
 console.log("Test PDFs written to test-files/");

@@ -60,7 +60,14 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
       return (
         <Field label="Compression level">
           <Segmented options={["Low", "Recommended", "High"]} value={text("level")} onChange={set("level")} />
-          <p className="text-[13px] text-subtle">Higher compression gives smaller files but lower image quality.</p>
+          <p className="text-[13px] text-subtle">
+            {values.level === "Low"
+              ? "Best image quality, good for printing (about 200 DPI)."
+              : values.level === "High"
+                ? "Smallest file, for screens only (about 96 DPI)."
+                : "Good balance for screens and everyday printing (about 150 DPI)."}{" "}
+            Only images are changed; text stays sharp.
+          </p>
         </Field>
       );
     case "split-pdf": {
