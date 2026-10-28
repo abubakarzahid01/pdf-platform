@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import type { PageViewport } from "pdfjs-dist";
 import type { PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { LazyPage } from "@/components/pdf/lazy-page";
 
-export type PageSize = { width: number; height: number };
+// Size at 100%, with the viewport used to convert screen positions to PDF coordinates.
+export type PageSize = { width: number; height: number; viewport?: PageViewport };
 
 type Props = {
   pdf: PDFDocumentProxy;
@@ -14,12 +16,14 @@ type Props = {
   // Lets the parent scroll to a page (thumbnails, previous/next buttons).
   scrollToRef: RefObject<((page: number) => void) | null>;
   onContainerWidth: (width: number) => void;
+  // Content drawn over each page, e.g. annotations.
+  renderOverlay?: (pageIndex: number) => ReactNode;
 };
 
 const PAGE_GAP = 24;
 
 // Continuous, scrollable view of every page at the given scale.
-export function PdfViewer({ pdf, sizes, scale, onPageChange, scrollToRef, onContainerWidth }: Props) {
+export function PdfViewer({ pdf, sizes, scale, onPageChange, scrollToRef, onContainerWidth, renderOverlay }: Props) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const slots = useRef<(HTMLDivElement | null)[]>([]);
   const frame = useRef(0);
@@ -69,6 +73,7 @@ export function PdfViewer({ pdf, sizes, scale, onPageChange, scrollToRef, onCont
             ref={(el) => {
               slots.current[i] = el;
             }}
+            className="relative"
           >
             <LazyPage
               pdf={pdf}
@@ -78,6 +83,7 @@ export function PdfViewer({ pdf, sizes, scale, onPageChange, scrollToRef, onCont
               root={container}
               className="shadow-[0_2px_6px_rgb(21_19_43/0.06),0_16px_40px_rgb(21_19_43/0.08)]"
             />
+            {renderOverlay?.(i)}
           </div>
         ))}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -32,6 +32,22 @@ import { PropertiesPanel } from "@/components/editor/properties-panel";
 import { PdfViewer, type PageSize } from "@/components/editor/pdf-viewer";
 import { PageThumbnails } from "@/components/editor/page-thumbnails";
 import { OpenFileScreen } from "@/components/editor/open-file-screen";
+import { AnnotationLayer } from "@/components/editor/annotation-layer";
+import {
+  highlightColors,
+  inkColors,
+  newId,
+  toPdfAnnotation,
+  type NewAnnotation,
+  type ViewAnnotation,
+} from "@/components/editor/annotations";
+import { annotatePdf } from "@/lib/pdf/operations/annotate";
+import { downloadBytes } from "@/lib/files/download";
+
+// Tools that work now; the others are previews of Phase 5.
+const workingTools = new Set<EditorTool>(["select", "highlight", "draw", "comment"]);
+
+type History = { past: ViewAnnotation[][]; present: ViewAnnotation[]; future: ViewAnnotation[][] };
 
 export type EditorTool =
   | "select"
@@ -96,6 +112,90 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const scrollToRef = useRef<((page: number) => void) | null>(null);
   const pageRef = useRef(1);
 
+  const [history, setHistory] = useState<History>({ past: [], present: [], future: [] });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [highlightColor, setHighlightColor] = useState(highlightColors[0]);
+  const [inkColor, setInkColor] = useState(inkColors[2]);
+  const [inkWidth, setInkWidth] = useState(3);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const annotations = history.present;
+  const selected = annotations.find((a) => a.id === selectedId) ?? null;
+  const byPage = useMemo(() => {
+    const map = new Map<number, ViewAnnotation[]>();
+    for (const a of annotations) map.set(a.page, [...(map.get(a.page) ?? []), a]);
+    return map;
+  }, [annotations]);
+
+  const commit = useCallback((next: ViewAnnotation[]) => {
+    setHistory((h) => ({ past: [...h.past, h.present], present: next, future: [] }));
+    setSaveError(null);
+  }, []);
+
+  const undo = useCallback(() => {
+    setHistory((h) => (h.past.length ? { past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present, ...h.future] } : h));
+  }, []);
+
+  const redo = useCallback(() => {
+    setHistory((h) => (h.future.length ? { past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) } : h));
+  }, []);
+
+  function addAnnotation(a: NewAnnotation) {
+    const item = { ...a, id: newId() } as ViewAnnotation;
+    commit([...annotations, item]);
+    // Comments need text, so select them for typing; switch to the select tool to avoid stray notes.
+    if (item.type === "comment") {
+      setSelectedId(item.id);
+      setTool("select");
+    }
+  }
+
+  const deleteAnnotation = useCallback(
+    (id: string) => {
+      commit(annotations.filter((a) => a.id !== id));
+      setSelectedId(null);
+    },
+    [annotations, commit],
+  );
+
+  // Typing a comment edits it in place; it isn't recorded as a separate undo step per key.
+  function setCommentText(id: string, text: string) {
+    setHistory((h) => ({ ...h, present: h.present.map((a) => (a.id === id && a.type === "comment" ? { ...a, text } : a)) }));
+  }
+
+  // Keyboard shortcuts (ignored while typing in a field).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      if (target.closest("input, textarea, select, [contenteditable=true]")) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+        e.preventDefault();
+        deleteAnnotation(selectedId);
+      } else if (e.key === "Escape") {
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo, deleteAnnotation, selectedId]);
+
+  // Warn before leaving with annotations that haven't been downloaded.
+  const unsaved = annotations.length > 0;
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
+
   // Read every page's size (rotation included) so the layout is stable before rendering.
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +203,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
       Array.from({ length: doc.pageCount }, (_, i) =>
         doc.pdf.getPage(i + 1).then((p) => {
           const v = p.getViewport({ scale: 1 });
-          return { width: v.width, height: v.height };
+          return { width: v.width, height: v.height, viewport: v };
         }),
       ),
     ).then((result) => {
@@ -142,14 +242,30 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     setZoom([...ZOOM_LEVELS].reverse().find((z) => z < scale - 0.01) ?? ZOOM_LEVELS[0]);
   }
 
-  function download() {
-    const url = URL.createObjectURL(doc.file);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = doc.file.name;
-    a.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  async function download() {
+    if (annotations.length === 0 || !sizes) {
+      downloadBytes(doc.file, doc.file.name);
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const pdfAnnotations = annotations.map((a) => toPdfAnnotation(a, sizes[a.page].viewport!));
+      const result = await annotatePdf({ name: doc.file.name, bytes: new Uint8Array(await doc.file.arrayBuffer()) }, pdfAnnotations);
+      downloadBytes(result.bytes, result.name);
+    } catch {
+      setSaveError("The annotated PDF couldn't be created. Your annotations are still here; please try again.");
+    } finally {
+      setSaving(false);
+    }
   }
+
+  function closeDocument() {
+    if (unsaved && !window.confirm("Your annotations haven't been downloaded. Close this PDF anyway?")) return;
+    onClose();
+  }
+
+  const emptyComments = annotations.filter((a) => a.type === "comment" && !a.text.trim()).length;
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-ink">
@@ -161,17 +277,30 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
           <div className="flex min-w-0 flex-col">
             <strong className="truncate text-[15px] font-semibold">{doc.file.name}</strong>
             <span className="text-xs text-subtle">
-              {doc.pageCount} page{doc.pageCount > 1 ? "s" : ""} · {formatSize(doc.file.size)} · No changes yet
+              {doc.pageCount} page{doc.pageCount > 1 ? "s" : ""} · {formatSize(doc.file.size)} ·{" "}
+              {annotations.length === 0
+                ? "No changes yet"
+                : `${annotations.length} annotation${annotations.length > 1 ? "s" : ""}, saved when you download`}
             </span>
+            {saveError && <span role="alert" className="text-xs text-danger">{saveError}</span>}
+            {!saveError && emptyComments > 0 && (
+              <span className="text-xs text-warn">
+                {emptyComments} empty comment{emptyComments > 1 ? "s" : ""} won&apos;t be saved
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" aria-label="Undo" disabled className={iconButton}><Undo2 className="size-4" /></button>
-          <button type="button" aria-label="Redo" disabled className={iconButton}><Redo2 className="size-4" /></button>
+          <button type="button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={history.past.length === 0} onClick={undo} className={iconButton}>
+            <Undo2 className="size-4" />
+          </button>
+          <button type="button" aria-label="Redo" title="Redo (Ctrl+Y)" disabled={history.future.length === 0} onClick={redo} className={iconButton}>
+            <Redo2 className="size-4" />
+          </button>
           <span className="mx-1 h-6 w-px bg-line" />
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeDocument}
             className="inline-flex items-center gap-2 rounded-[10px] border border-line bg-surface px-3.5 py-2.5 text-sm font-medium hover:bg-surface-soft"
           >
             <FolderOpen className="size-4" aria-hidden="true" />
@@ -180,11 +309,12 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
           <button
             type="button"
             onClick={download}
-            title="No edits have been made, so this downloads your original file."
-            className="inline-flex items-center gap-2 rounded-[10px] bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-strong"
+            disabled={saving}
+            title={annotations.length === 0 ? "No changes yet, so this downloads your original file." : "Downloads a copy with your annotations."}
+            className="inline-flex items-center gap-2 rounded-[10px] bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-strong disabled:opacity-60"
           >
             <Download className="size-4" aria-hidden="true" />
-            Download PDF
+            {saving ? "Saving…" : "Download PDF"}
           </button>
         </div>
       </header>
@@ -232,6 +362,22 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
               onPageChange={handlePageChange}
               scrollToRef={scrollToRef}
               onContainerWidth={setContainerWidth}
+              renderOverlay={(i) => (
+                <AnnotationLayer
+                  page={i}
+                  width={sizes[i].width}
+                  height={sizes[i].height}
+                  scale={scale}
+                  tool={tool}
+                  items={byPage.get(i) ?? []}
+                  selectedId={selectedId}
+                  highlightColor={highlightColor}
+                  inkColor={inkColor}
+                  inkWidth={inkWidth}
+                  onCreate={addAnnotation}
+                  onSelect={setSelectedId}
+                />
+              )}
             />
           ) : (
             <div role="status" className="flex flex-1 items-center justify-center text-sm text-subtle">
@@ -287,9 +433,20 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
         <aside aria-label="Properties" className="hidden w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-l border-line bg-surface p-5 lg:flex">
           <div className="flex items-center justify-between">
             <strong className="text-[15px]">{toolGroups.flat().find((t) => t.id === tool)?.label}</strong>
-            <PrototypeBadge label="Not functional yet" />
+            {!workingTools.has(tool) && <PrototypeBadge label="Not functional yet" />}
           </div>
-          <PropertiesPanel tool={tool} />
+          <PropertiesPanel
+            tool={tool}
+            selected={selected}
+            highlightColor={highlightColor}
+            inkColor={inkColor}
+            inkWidth={inkWidth}
+            onHighlightColor={setHighlightColor}
+            onInkColor={setInkColor}
+            onInkWidth={setInkWidth}
+            onCommentText={setCommentText}
+            onDelete={deleteAnnotation}
+          />
         </aside>
       </div>
     </div>
