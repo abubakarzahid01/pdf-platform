@@ -40,6 +40,12 @@ src/
     page.tsx      Homepage (temporary Phase 1 placeholder)
   config/
     site.ts       Brand name, tagline and upload limits
+    tools.ts      Tool catalogue and accepted file types per tool
+  lib/
+    files/        File checks: real type from bytes, size, PDF password/damage/page limit
+    pdf/          PDF.js loading and helpers
+scripts/          make-test-pdfs.mjs generates test-files/
+test-files/       Test PDFs (normal, mixed sizes, locked, damaged, fake, too many pages)
 ```
 
 ## Design tokens
@@ -65,8 +71,9 @@ Every significant library must be safe for commercial, closed-source use.
 |---|---|---|---|
 | Framework | Next.js, React | MIT | ✅ installed |
 | Styling | Tailwind CSS | MIT | ✅ installed |
-| PDF rendering | PDF.js (`pdfjs-dist`) | Apache-2.0 | Phase 3 |
-| PDF manipulation | pdf-lib | MIT | Phase 4 |
+| Icons | lucide-react | ISC | ✅ installed |
+| PDF rendering | PDF.js (`pdfjs-dist` 6) | Apache-2.0 | ✅ installed (Phase 3) |
+| PDF manipulation | pdf-lib | MIT | ✅ installed (test files now, tools in Phase 4) |
 | Excel / CSV export | ExcelJS, PapaParse | MIT | Phase 6 |
 | Office → PDF | LibreOffice (headless, server) | MPL-2.0 | Conversion phase |
 | OCR | Tesseract | Apache-2.0 | Phase 6 |

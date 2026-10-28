@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { limits } from "@/config/site";
 import type { InputSpec } from "@/config/tools";
+import { checkFile } from "@/lib/files/check-file";
+import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { FileDropzone } from "@/components/file-dropzone";
 import { PrototypeBadge } from "@/components/prototype-badge";
-import { SelectedFiles } from "@/components/selected-files";
+import { SelectedFiles, type FileItemStatus } from "@/components/selected-files";
 import { ToolOptions } from "@/components/tool/tool-options";
+import { FilePreview } from "@/components/tool/file-preview";
 
 type Props = {
   slug: string;
@@ -14,50 +17,112 @@ type Props = {
   input: InputSpec;
 };
 
+export type CheckedItem = {
+  id: number;
+  file: File;
+  status: FileItemStatus;
+  pdf?: PDFDocumentProxy;
+  pageCount?: number;
+};
+
+let nextId = 1;
+
 export function ToolWorkspace({ slug, actionLabel, input }: Props) {
-  const [files, setFiles] = useState<File[]>([]);
-  const hasFiles = files.length > 0;
+  const [items, setItems] = useState<CheckedItem[]>([]);
+  const itemsRef = useRef(items);
+  const removedIds = useRef(new Set<number>());
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  // Free the opened PDFs when leaving the page.
+  useEffect(() => {
+    return () => itemsRef.current.forEach((item) => closePdf(item.pdf));
+  }, []);
+
+  function discard(item: CheckedItem) {
+    removedIds.current.add(item.id);
+    closePdf(item.pdf);
+  }
+
+  function addFiles(files: File[]) {
+    const added: CheckedItem[] = files.map((file) => ({ id: nextId++, file, status: { state: "checking" } }));
+    if (!input.multiple) itemsRef.current.forEach(discard);
+    setItems((prev) => (input.multiple ? [...prev, ...added] : added));
+
+    for (const item of added) {
+      checkFile(item.file, input.kinds, input.expected).then((result) => {
+        if (removedIds.current.has(item.id)) {
+          if (result.ok) closePdf(result.pdf);
+          return;
+        }
+        const update: Partial<CheckedItem> = result.ok
+          ? {
+              status: { state: "ok", detail: result.pageCount ? `${result.pageCount} page${result.pageCount > 1 ? "s" : ""}` : undefined },
+              pdf: result.pdf,
+              pageCount: result.pageCount,
+            }
+          : { status: { state: "error", message: result.message } };
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ...update } : i)));
+      });
+    }
+  }
+
+  function removeAt(index: number) {
+    const item = items[index];
+    if (item) discard(item);
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  const hasFiles = items.length > 0;
+  const checking = items.some((i) => i.status.state === "checking");
+  const errors = items.filter((i) => i.status.state === "error").length;
+  const firstValid = items.find((i) => i.status.state === "ok");
+
+  let note = "Add a file to get started.";
+  if (checking) note = "Checking your files…";
+  else if (errors > 0) note = `Remove the ${errors === 1 ? "file" : `${errors} files`} with problems to continue.`;
+  else if (hasFiles) note = "Files checked. Processing for this tool arrives in a later phase.";
 
   return (
     <div className="flex flex-wrap items-start gap-6">
       <section className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
         {hasFiles ? (
           <>
-            <SelectedFiles files={files} onRemove={(i) => setFiles(files.filter((_, j) => j !== i))} />
-            {input.multiple && (
+            <SelectedFiles files={items.map((i) => i.file)} statuses={items.map((i) => i.status)} onRemove={removeAt} />
+            <div className="flex flex-wrap gap-4">
+              {input.multiple && (
+                <label className="cursor-pointer text-sm font-semibold text-brand-strong hover:text-brand">
+                  + Add more files
+                  <input
+                    type="file"
+                    multiple
+                    accept={input.accept}
+                    className="hidden"
+                    onChange={(e) => {
+                      addFiles(Array.from(e.target.files ?? []));
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
               <button
                 type="button"
-                onClick={() => setFiles([])}
-                className="self-start text-sm font-semibold text-brand-strong hover:text-brand"
+                onClick={() => {
+                  items.forEach(discard);
+                  setItems([]);
+                }}
+                className="text-sm font-semibold text-subtle hover:text-ink"
               >
                 Start over
               </button>
-            )}
-            <div className="flex flex-col gap-3 rounded-panel border border-line-soft bg-surface-soft p-6">
-              <div className="flex items-center justify-between gap-3">
-                <strong className="text-[15px]">Preview</strong>
-                <PrototypeBadge />
-              </div>
-              <div className="flex gap-5 overflow-x-auto pb-2">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="flex shrink-0 flex-col items-center gap-2">
-                    <div className="flex h-[168px] w-[124px] flex-col gap-1.5 rounded bg-surface p-3.5 shadow-[0_1px_3px_rgb(21_19_43/0.12)]">
-                      <span className="h-1.5 w-1/2 rounded-sm bg-brand-ring" />
-                      <span className="h-1 w-full rounded-sm bg-line" />
-                      <span className="h-1 w-5/6 rounded-sm bg-line" />
-                      <span className="mt-1 h-10 w-full rounded-sm bg-canvas" />
-                      <span className="h-1 w-4/5 rounded-sm bg-line" />
-                    </div>
-                    <span className="text-xs text-muted">Page {n}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[13px] text-subtle">Real page previews of your file arrive in Phase 3.</p>
             </div>
+            {firstValid && <FilePreview item={firstValid} showsFirstOf={items.length > 1} />}
           </>
         ) : (
           <FileDropzone
-            onFiles={setFiles}
+            onFiles={addFiles}
             accept={input.accept}
             multiple={input.multiple}
             hint={`${input.label} · up to ${limits.free.maxFileSizeMb} MB`}
@@ -78,10 +143,8 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
         >
           {actionLabel}
         </button>
-        <span className="text-center text-xs text-subtle">
-          {hasFiles
-            ? "Processing is not built yet. This tool becomes functional in a later phase."
-            : "Add a file to get started."}
+        <span role="status" className={`text-center text-xs ${errors > 0 ? "text-danger" : "text-subtle"}`}>
+          {note}
         </span>
       </aside>
     </div>

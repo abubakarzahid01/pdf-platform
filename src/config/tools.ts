@@ -22,6 +22,7 @@ import {
   Table,
   type LucideIcon,
 } from "lucide-react";
+import type { FileKind } from "@/lib/files/detect-type";
 
 // The full tool catalogue. Homepage cards, navigation and tool pages read from here.
 
@@ -99,20 +100,29 @@ export function getTool(slug: string) {
 
 // What each tool accepts. `accept` only filters the file picker; real validation
 // of file contents happens on upload (Phase 3), never trusting the extension alone.
-export type InputSpec = { accept: string; label: string; multiple: boolean };
+export type InputSpec = {
+  accept: string;
+  label: string;
+  // File types allowed after checking the file's actual bytes.
+  kinds: FileKind[];
+  // Used in error messages: "This file isn't <expected>".
+  expected: string;
+  multiple: boolean;
+};
 
 const inputSpecs: Record<string, Omit<InputSpec, "multiple">> = {
-  "word-to-pdf": { accept: ".doc,.docx,.odt,.rtf,.txt", label: "DOC, DOCX, ODT, RTF or TXT" },
-  "excel-to-pdf": { accept: ".xls,.xlsx,.ods", label: "XLS, XLSX or ODS" },
-  "powerpoint-to-pdf": { accept: ".ppt,.pptx,.odp", label: "PPT, PPTX or ODP" },
-  "images-to-pdf": { accept: ".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff", label: "JPG, PNG, WEBP and other images" },
+  "word-to-pdf": { accept: ".doc,.docx,.odt,.rtf,.txt", label: "DOC, DOCX, ODT, RTF or TXT", kinds: ["zip", "ole", "rtf", "text"], expected: "a Word document" },
+  "excel-to-pdf": { accept: ".xls,.xlsx,.ods", label: "XLS, XLSX or ODS", kinds: ["zip", "ole"], expected: "an Excel workbook" },
+  "powerpoint-to-pdf": { accept: ".ppt,.pptx,.odp", label: "PPT, PPTX or ODP", kinds: ["zip", "ole"], expected: "a PowerPoint presentation" },
+  "images-to-pdf": { accept: ".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff", label: "JPG, PNG, WEBP and other images", kinds: ["png", "jpeg", "gif", "webp", "bmp", "tiff"], expected: "an image" },
 };
+
+const pdfInput: Omit<InputSpec, "multiple"> = { accept: ".pdf,application/pdf", label: "PDF", kinds: ["pdf"], expected: "a PDF" };
 
 const multiFileTools = new Set(["merge-pdf", "images-to-pdf", "ai-extraction"]);
 
 export function getInputSpec(slug: string): InputSpec {
-  const spec = inputSpecs[slug] ?? { accept: ".pdf,application/pdf", label: "PDF" };
-  return { ...spec, multiple: multiFileTools.has(slug) };
+  return { ...(inputSpecs[slug] ?? pdfInput), multiple: multiFileTools.has(slug) };
 }
 
 export function getRelatedTools(tool: Tool, count = 3) {
