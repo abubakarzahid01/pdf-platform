@@ -87,6 +87,19 @@ async function ToolContent({ params }: { params: PageProps<"/tools/[slug]">["par
         <p className="max-w-[720px] text-[17px] text-muted">{tool.description}</p>
       </div>
 
+      {tool.slug === "edit-pdf" && (
+        <Link
+          href="/editor"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand-ring bg-brand-soft px-5 py-4 text-ink hover:border-brand"
+        >
+          <span className="text-[15px]">
+            <strong className="font-semibold">Preview the editor</strong>
+            <span className="text-muted"> — see the editing workspace with a sample document.</span>
+          </span>
+          <span className="text-sm font-semibold text-brand-strong">Open editor →</span>
+        </Link>
+      )}
+
       <ToolWorkspace slug={tool.slug} actionLabel={actionLabel(tool)} input={input} />
 
       <section className="mt-4 grid grid-cols-1 gap-5 border-t border-line-soft pt-6 md:grid-cols-3">
