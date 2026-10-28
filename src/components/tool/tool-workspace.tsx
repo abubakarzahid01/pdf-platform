@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { limits } from "@/config/site";
 import type { InputSpec } from "@/config/tools";
 import { checkFile } from "@/lib/files/check-file";
+import { setPendingDocument } from "@/lib/files/pending-document";
 import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { FileDropzone } from "@/components/file-dropzone";
 import { PrototypeBadge } from "@/components/prototype-badge";
@@ -28,6 +30,7 @@ export type CheckedItem = {
 let nextId = 1;
 
 export function ToolWorkspace({ slug, actionLabel, input }: Props) {
+  const router = useRouter();
   const [items, setItems] = useState<CheckedItem[]>([]);
   const itemsRef = useRef(items);
   const removedIds = useRef(new Set<number>());
@@ -80,9 +83,22 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   const errors = items.filter((i) => i.status.state === "error").length;
   const firstValid = items.find((i) => i.status.state === "ok");
 
+  // Edit PDF is the first tool with a working action: it opens the editor.
+  const opensEditor = slug === "edit-pdf";
+  const canAct = opensEditor && !!firstValid?.pdf && !checking && errors === 0;
+
+  function openInEditor() {
+    if (!firstValid?.pdf || !firstValid.pageCount) return;
+    // Hand the open document to the editor; this page must no longer close it.
+    itemsRef.current = itemsRef.current.filter((i) => i.id !== firstValid.id);
+    setPendingDocument({ file: firstValid.file, pdf: firstValid.pdf, pageCount: firstValid.pageCount });
+    router.push("/editor");
+  }
+
   let note = "Add a file to get started.";
   if (checking) note = "Checking your files…";
   else if (errors > 0) note = `Remove the ${errors === 1 ? "file" : `${errors} files`} with problems to continue.`;
+  else if (canAct) note = "Your file stays in your browser. Nothing is uploaded.";
   else if (hasFiles) note = "Files checked. Processing for this tool arrives in a later phase.";
 
   return (
@@ -133,12 +149,13 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
       <aside className="flex w-full max-w-[400px] flex-[1_1_340px] flex-col gap-5 rounded-panel border border-line bg-surface p-6 shadow-[0_12px_32px_rgb(21_19_43/0.06)]">
         <div className="flex items-center justify-between">
           <strong className="font-display text-[17px]">Options</strong>
-          <PrototypeBadge />
+          {!opensEditor && <PrototypeBadge />}
         </div>
         <ToolOptions slug={slug} />
         <button
           type="button"
-          disabled
+          disabled={!canAct}
+          onClick={openInEditor}
           className="rounded-xl bg-brand py-[15px] text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {actionLabel}

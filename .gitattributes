@@ -1,0 +1,7 @@
+# Never convert line endings inside document files; they are binary formats.
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.png binary
+*.jpg binary

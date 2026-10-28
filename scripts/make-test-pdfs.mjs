@@ -51,7 +51,11 @@ for (const [label, size, rotation] of [
 }
 await writeFile(new URL("mixed-sizes.pdf", out), await mixed.save());
 
-// 3. Too many pages for the free limit (200)
+// 3a. Long but within the limit: for scrolling and lazy rendering
+const long = await textDocument(150, "Long report");
+await writeFile(new URL("long-150-pages.pdf", out), await long.save());
+
+// 3b. Too many pages for the free limit (200)
 const many = await textDocument(250, "Long document");
 await writeFile(new URL("too-many-pages-250.pdf", out), await many.save());
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Download,
   Eraser,
+  FolderOpen,
   Highlighter,
   ImagePlus,
   Link as LinkIcon,
@@ -23,9 +24,14 @@ import {
   Undo2,
   type LucideIcon,
 } from "lucide-react";
+import { clearPendingDocument, peekPendingDocument, type OpenDocument } from "@/lib/files/pending-document";
+import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
+import { formatSize } from "@/components/selected-files";
 import { PrototypeBadge } from "@/components/prototype-badge";
 import { PropertiesPanel } from "@/components/editor/properties-panel";
-import { PAGE_HEIGHT, PAGE_WIDTH, PageThumb, SAMPLE_PAGE_COUNT, SamplePage } from "@/components/editor/sample-pages";
+import { PdfViewer, type PageSize } from "@/components/editor/pdf-viewer";
+import { PageThumbnails } from "@/components/editor/page-thumbnails";
+import { OpenFileScreen } from "@/components/editor/open-file-screen";
 
 export type EditorTool =
   | "select"
@@ -54,32 +60,109 @@ const toolGroups: { id: EditorTool; label: string; icon: LucideIcon }[][] = [
   ],
 ];
 
-const ZOOM_LEVELS = [50, 75, 100, 125, 150, 200];
+const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+const FIT_PADDING = 48;
 
 const iconButton =
   "flex size-9 items-center justify-center rounded-[9px] border border-line bg-surface text-ink-soft hover:bg-surface-soft disabled:opacity-40";
 
+// Documents scheduled to close. Closing is delayed so React's development
+// double-mount check doesn't close a document that is still in use.
+const closeTimers = new Map<PDFDocumentProxy, number>();
+
 export function EditorWorkspace() {
-  const [tool, setTool] = useState<EditorTool>("edit-text");
+  const [doc, setDoc] = useState<OpenDocument | null>(() => peekPendingDocument());
+
+  useEffect(() => {
+    if (!doc) return;
+    clearPendingDocument(doc);
+    window.clearTimeout(closeTimers.get(doc.pdf));
+    closeTimers.delete(doc.pdf);
+    return () => {
+      closeTimers.set(doc.pdf, window.setTimeout(() => closePdf(doc.pdf), 1000));
+    };
+  }, [doc]);
+
+  if (!doc) return <OpenFileScreen onOpen={setDoc} />;
+  return <Editor key={doc.pdf.fingerprints[0] ?? doc.file.name} doc={doc} onClose={() => setDoc(null)} />;
+}
+
+function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
+  const [tool, setTool] = useState<EditorTool>("select");
+  const [sizes, setSizes] = useState<PageSize[] | null>(null);
   const [page, setPage] = useState(1);
-  const [zoomIndex, setZoomIndex] = useState(2);
-  const zoom = ZOOM_LEVELS[zoomIndex];
-  const scale = zoom / 100;
+  const [zoom, setZoom] = useState<"fit" | number>("fit");
+  const [containerWidth, setContainerWidth] = useState(0);
+  const scrollToRef = useRef<((page: number) => void) | null>(null);
+  const pageRef = useRef(1);
+
+  // Read every page's size (rotation included) so the layout is stable before rendering.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      Array.from({ length: doc.pageCount }, (_, i) =>
+        doc.pdf.getPage(i + 1).then((p) => {
+          const v = p.getViewport({ scale: 1 });
+          return { width: v.width, height: v.height };
+        }),
+      ),
+    ).then((result) => {
+      if (!cancelled) setSizes(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [doc]);
+
+  const widest = sizes ? Math.max(...sizes.map((s) => s.width)) : 1;
+  const fitScale = containerWidth > 0 ? Math.min(3, Math.max(0.25, (containerWidth - FIT_PADDING) / widest)) : 1;
+  const scale = zoom === "fit" ? fitScale : zoom;
+
+  // Keep the current page in view when the zoom changes.
+  useEffect(() => {
+    scrollToRef.current?.(pageRef.current);
+  }, [scale]);
+
+  const handlePageChange = useCallback((p: number) => {
+    pageRef.current = p;
+    setPage(p);
+  }, []);
+
+  function goTo(p: number) {
+    const target = Math.min(doc.pageCount, Math.max(1, p));
+    handlePageChange(target);
+    scrollToRef.current?.(target);
+  }
+
+  function zoomIn() {
+    setZoom(ZOOM_LEVELS.find((z) => z > scale + 0.01) ?? ZOOM_LEVELS[ZOOM_LEVELS.length - 1]);
+  }
+
+  function zoomOut() {
+    setZoom([...ZOOM_LEVELS].reverse().find((z) => z < scale - 0.01) ?? ZOOM_LEVELS[0]);
+  }
+
+  function download() {
+    const url = URL.createObjectURL(doc.file);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = doc.file.name;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-ink">
-      {/* Top bar */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2.5 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <Link href="/tools/edit-pdf" aria-label="Back to Edit PDF" className={iconButton}>
             <ArrowLeft className="size-4" />
           </Link>
           <div className="flex min-w-0 flex-col">
-            <div className="flex items-center gap-2">
-              <strong className="truncate text-[15px] font-semibold">Sample-Quarterly-Report.pdf</strong>
-              <PrototypeBadge label="Sample document" />
-            </div>
-            <span className="text-xs text-subtle">{SAMPLE_PAGE_COUNT} pages · Editing is not functional yet</span>
+            <strong className="truncate text-[15px] font-semibold">{doc.file.name}</strong>
+            <span className="text-xs text-subtle">
+              {doc.pageCount} page{doc.pageCount > 1 ? "s" : ""} · {formatSize(doc.file.size)} · No changes yet
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -88,9 +171,17 @@ export function EditorWorkspace() {
           <span className="mx-1 h-6 w-px bg-line" />
           <button
             type="button"
-            disabled
-            title="Download arrives with real PDF editing"
-            className="inline-flex items-center gap-2 rounded-[10px] bg-brand px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 rounded-[10px] border border-line bg-surface px-3.5 py-2.5 text-sm font-medium hover:bg-surface-soft"
+          >
+            <FolderOpen className="size-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Open another</span>
+          </button>
+          <button
+            type="button"
+            onClick={download}
+            title="No edits have been made, so this downloads your original file."
+            className="inline-flex items-center gap-2 rounded-[10px] bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-strong"
           >
             <Download className="size-4" aria-hidden="true" />
             Download PDF
@@ -98,7 +189,6 @@ export function EditorWorkspace() {
         </div>
       </header>
 
-      {/* Tool bar */}
       <div role="toolbar" aria-label="Editing tools" className="flex items-center gap-0.5 overflow-x-auto border-b border-line bg-surface px-3 py-1.5 lg:justify-center">
         {toolGroups.map((group, gi) => (
           <div key={gi} className="flex items-center gap-0.5">
@@ -131,59 +221,74 @@ export function EditorWorkspace() {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        {/* Page thumbnails */}
-        <aside aria-label="Pages" className="hidden w-[168px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-line bg-surface p-4 md:flex">
-          <span className="text-xs font-semibold uppercase tracking-[0.06em] text-subtle">Pages</span>
-          {Array.from({ length: SAMPLE_PAGE_COUNT }, (_, i) => i + 1).map((n) => (
-            <button
-              key={n}
-              type="button"
-              aria-label={`Go to page ${n}`}
-              aria-current={page === n ? "page" : undefined}
-              onClick={() => setPage(n)}
-              className="flex flex-col items-center gap-1.5"
-            >
-              <span className={`rounded-md outline-offset-[3px] ${page === n ? "outline-2 outline-brand outline" : ""}`}>
-                <PageThumb />
-              </span>
-              <span className={`text-xs font-semibold ${page === n ? "text-brand-strong" : "text-subtle"}`}>{n}</span>
-            </button>
-          ))}
-        </aside>
+        {sizes && <PageThumbnails pdf={doc.pdf} sizes={sizes} current={page} onSelect={goTo} />}
 
-        {/* Document canvas */}
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex-1 overflow-auto p-6 sm:p-8">
-            <div className="mx-auto" style={{ width: PAGE_WIDTH * scale, height: PAGE_HEIGHT * scale }}>
-              <div style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
-                <SamplePage page={page} editing={tool === "edit-text" && page === 1} />
-              </div>
+          {sizes ? (
+            <PdfViewer
+              pdf={doc.pdf}
+              sizes={sizes}
+              scale={scale}
+              onPageChange={handlePageChange}
+              scrollToRef={scrollToRef}
+              onContainerWidth={setContainerWidth}
+            />
+          ) : (
+            <div role="status" className="flex flex-1 items-center justify-center text-sm text-subtle">
+              Opening document…
             </div>
-          </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-center gap-3 border-t border-line bg-surface p-2.5 text-[13px]">
-            <button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => setPage(page - 1)} className={iconButton}>
+            <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => goTo(page - 1)} className={iconButton}>
               <ChevronLeft className="size-4" />
             </button>
-            <span className="text-muted">
-              Page <strong className="text-ink">{page}</strong> of {SAMPLE_PAGE_COUNT}
-            </span>
-            <button type="button" aria-label="Next page" disabled={page === SAMPLE_PAGE_COUNT} onClick={() => setPage(page + 1)} className={iconButton}>
+            <label className="flex items-center gap-2 text-muted">
+              Page
+              <input
+                key={page}
+                defaultValue={page}
+                inputMode="numeric"
+                aria-label="Current page"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") goTo(Number(e.currentTarget.value) || page);
+                }}
+                onBlur={(e) => goTo(Number(e.currentTarget.value) || page)}
+                className="w-12 rounded-lg border border-line px-1.5 py-1.5 text-center font-semibold text-ink"
+              />
+              of {doc.pageCount}
+            </label>
+            <button type="button" aria-label="Next page" disabled={page >= doc.pageCount} onClick={() => goTo(page + 1)} className={iconButton}>
               <ChevronRight className="size-4" />
             </button>
             <span className="h-6 w-px bg-line" />
-            <button type="button" aria-label="Zoom out" disabled={zoomIndex === 0} onClick={() => setZoomIndex(zoomIndex - 1)} className={iconButton}>
+            <button type="button" aria-label="Zoom out" disabled={scale <= ZOOM_LEVELS[0] + 0.01} onClick={zoomOut} className={iconButton}>
               <Minus className="size-4" />
             </button>
-            <span className="min-w-12 text-center font-semibold">{zoom}%</span>
-            <button type="button" aria-label="Zoom in" disabled={zoomIndex === ZOOM_LEVELS.length - 1} onClick={() => setZoomIndex(zoomIndex + 1)} className={iconButton}>
+            <span className="min-w-12 text-center font-semibold" aria-live="polite">
+              {Math.round(scale * 100)}%
+            </span>
+            <button type="button" aria-label="Zoom in" disabled={scale >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1] - 0.01} onClick={zoomIn} className={iconButton}>
               <Plus className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-pressed={zoom === "fit"}
+              onClick={() => setZoom("fit")}
+              className={`rounded-[9px] border px-3 py-2 font-medium ${
+                zoom === "fit" ? "border-brand-ring bg-brand-soft text-brand-strong" : "border-line bg-surface text-ink hover:bg-surface-soft"
+              }`}
+            >
+              Fit width
             </button>
           </div>
         </main>
 
-        {/* Properties */}
         <aside aria-label="Properties" className="hidden w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-l border-line bg-surface p-5 lg:flex">
+          <div className="flex items-center justify-between">
+            <strong className="text-[15px]">{toolGroups.flat().find((t) => t.id === tool)?.label}</strong>
+            <PrototypeBadge label="Not functional yet" />
+          </div>
           <PropertiesPanel tool={tool} />
         </aside>
       </div>
