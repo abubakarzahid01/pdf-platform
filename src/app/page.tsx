@@ -1,65 +1,61 @@
 import { site } from "@/config/site";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
+import { HeroUpload } from "@/components/home/hero-upload";
+import { ToolGrid } from "@/components/home/tool-grid";
+import { ExtractionShowcase } from "@/components/home/extraction-showcase";
+import { HowItWorks } from "@/components/home/how-it-works";
+import { Pricing } from "@/components/home/pricing";
 
-// Temporary Phase 1 page: confirms fonts and design tokens work.
-// Replaced by the real homepage in Phase 2.
-
-const swatches = [
-  { name: "brand", className: "bg-brand" },
-  { name: "brand-soft", className: "bg-brand-soft" },
-  { name: "info", className: "bg-info" },
-  { name: "ink", className: "bg-ink" },
-  { name: "canvas", className: "bg-canvas" },
-  { name: "warn-soft", className: "bg-warn-soft" },
-  { name: "danger-soft", className: "bg-danger-soft" },
-  { name: "success-soft", className: "bg-success-soft" },
-];
+const container = "mx-auto max-w-[1200px] px-4 sm:px-8";
 
 export default function Home() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center bg-surface-soft px-4 py-20">
-      <div className="flex w-full max-w-2xl flex-col items-center gap-6 text-center">
-        <span className="rounded-full bg-brand-soft px-3 py-1.5 text-sm font-semibold text-brand-strong">
-          Phase 1 · Project foundation
-        </span>
-        <h1 className="font-display text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
-          {site.tagline}
-        </h1>
-        <p className="text-lg text-muted">
-          {site.name} is set up. The real homepage arrives in Phase 2.
-        </p>
-
-        <section
-          aria-label="Design tokens"
-          className="mt-4 w-full rounded-panel border border-line bg-surface p-6 text-left shadow-raised"
-        >
-          <h2 className="font-display text-lg font-bold">Design tokens</h2>
-          <p className="mt-1 text-sm text-subtle">
-            Headings use Plus Jakarta Sans, body text uses Inter.
-          </p>
-          <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {swatches.map((s) => (
-              <li key={s.name} className="flex flex-col gap-2">
-                <span className={`h-12 rounded-card border border-line ${s.className}`} />
-                <span className="text-xs font-medium text-ink-soft">{s.name}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="rounded-xl bg-brand px-5 py-3 font-semibold text-white hover:bg-brand-strong"
-            >
-              Primary button
-            </button>
-            <button
-              type="button"
-              className="rounded-xl border border-line bg-surface px-5 py-3 font-medium text-ink hover:bg-surface-soft"
-            >
-              Secondary button
-            </button>
+    <>
+      <SiteHeader />
+      <main className="flex-1">
+        <section className="border-b border-line-soft bg-surface-soft pb-[72px] pt-16 sm:pt-20">
+          <div className={`${container} flex flex-col items-center gap-5 text-center`}>
+            <span className="rounded-full bg-brand-soft px-3 py-1.5 text-[13px] font-semibold text-brand-strong">
+              New · Extract tables from many PDFs at once
+            </span>
+            <h1 className="max-w-[860px] font-display text-[38px] font-extrabold leading-[1.06] tracking-[-0.035em] sm:text-[60px]">
+              {site.tagline}
+            </h1>
+            <p className="max-w-[640px] text-lg text-muted sm:text-[19px]">
+              Edit, convert, organise and extract data from your documents. No software to install.
+            </p>
+            <div className="mt-5 flex w-full justify-center">
+              <HeroUpload />
+            </div>
           </div>
         </section>
-      </div>
-    </main>
+
+        <section id="tools" className="scroll-mt-20 pb-10 pt-[88px]">
+          <div className={container}>
+            <ToolGrid />
+          </div>
+        </section>
+
+        <section className="py-[72px]">
+          <div className={container}>
+            <ExtractionShowcase />
+          </div>
+        </section>
+
+        <section className="pb-[72px] pt-14">
+          <div className={container}>
+            <HowItWorks />
+          </div>
+        </section>
+
+        <section id="pricing" className="scroll-mt-20 border-y border-line-soft bg-surface-soft py-20">
+          <div className={container}>
+            <Pricing />
+          </div>
+        </section>
+      </main>
+      <SiteFooter />
+    </>
   );
 }
