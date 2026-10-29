@@ -8,6 +8,8 @@ export type ExtractedRow = {
   fileName: string;
   page: number;
   scanned: boolean;
+  // Read from a scanned image with text recognition (OCR), not from real PDF text.
+  ocr?: boolean;
   values: Record<InvoiceField, string>;
   // Fields the extractor was unsure about. Never shown as verified until a person confirms.
   lowConfidence: InvoiceField[];

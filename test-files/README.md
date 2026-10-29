@@ -12,7 +12,8 @@ Generated files for checking uploads, validation and rendering. Not real documen
 | `invoice-orchard.pdf` | Edge invoice: "From:" supplier, date in words, amounts with EUR, no invoice number | Invoice no. reported missing; totals balance |
 | `invoice-kestrel.pdf` | Edge invoice: "Invoice #", ISO date, $ amounts, totals that don't add up | Mismatch flagged |
 | `word-letter.pdf` | Exported by Microsoft Word: embedded subset Calibri, kerned TJ arrays, bold/italic runs, Symbol bullets, a table | 18 of 20 lines editable (bullets excluded); edits keep position |
-| `scanned-page.pdf` | Only an image of a page, no real text | No editable text; editor explains OCR comes later |
+| `scanned-page.pdf` | Only an image of grey bars that look like text lines, no real text | No editable text; OCR finds nothing and says so |
+| `invoice-scanned.pdf` | Screenshot of the Bluefield invoice as a page image (`invoice-scanned.png`), no text layer | OCR reads all six fields; low-certainty words marked unsure |
 | `images-heavy.pdf` | Two large photo-like images (JPEG and lossless) plus text | Compresses to a much smaller file; text unchanged |
 | `too-many-pages-250.pdf` | Over the free page limit (200) | Rejected with a page-limit message |
 | `broken-truncated.pdf` | A real PDF cut off halfway | Rejected as damaged |

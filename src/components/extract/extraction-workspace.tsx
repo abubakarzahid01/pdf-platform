@@ -11,6 +11,7 @@ import { downloadBytes } from "@/lib/files/download";
 import { clearPendingFiles, peekPendingFiles } from "@/lib/files/pending-document";
 import { closePdf, loadPdfJs, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { readTextItems } from "@/lib/pdf/text-items";
+import { addOcrInBrowser } from "@/lib/ocr/ocr-browser";
 import { extractInvoice } from "@/lib/extraction/invoice";
 import { invoicesToCsv, invoicesToXlsx } from "@/lib/extraction/export";
 import {
@@ -49,7 +50,7 @@ type Doc = {
 let nextId = 1;
 
 function fileStatus(doc: Doc, row: ExtractedRow | undefined) {
-  if (doc.state === "reading") return { text: "Reading…", className: "text-subtle", bg: "" };
+  if (doc.state === "reading") return { text: doc.message ?? "Reading…", className: "text-subtle", bg: "" };
   if (doc.state === "error" || !row) return { text: "Can't read", className: "text-danger", bg: "bg-[#fff7f7]" };
   if (row.scanned) return { text: "No text", className: "text-warn", bg: "bg-[#fffbf3]" };
   const issues = rowIssues(row);
@@ -90,9 +91,13 @@ export function ExtractionWorkspace() {
         continue;
       }
       try {
-        const row = extractInvoice(await readTextItems(result.pdf, pdfjs.Util.transform), doc.file.name, doc.id);
+        // Scanned pages (no text) are read from their images with OCR, which takes a few seconds a page.
+        const pages = await addOcrInBrowser(result.pdf, await readTextItems(result.pdf, pdfjs.Util.transform), (done, total) =>
+          setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, message: `OCR ${Math.min(done + 1, total)}/${total}…` } : d))),
+        );
+        const row = extractInvoice(pages, doc.file.name, doc.id);
         setRows((prev) => [...prev, row]);
-        setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, state: "done", pdf: result.pdf } : d)));
+        setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, state: "done", message: undefined, pdf: result.pdf } : d)));
       } catch {
         closePdf(result.pdf);
         setDocs((prev) => prev.map((d) => (d.id === doc.id ? { ...d, state: "error", message: "The text in this PDF couldn't be read." } : d)));
@@ -391,7 +396,7 @@ function SourcePreview({ row, pdf, onVerify }: { row: ExtractedRow; pdf: PDFDocu
 
   let explanation = "All values were found in the document and the totals add up.";
   if (row.scanned) {
-    explanation = "No text was found in this PDF. It may be a scanned image; text recognition (OCR) comes later in this phase. You can type the values in yourself.";
+    explanation = "No text could be read from this PDF, even with text recognition (OCR). The scan may be blank or too unclear. You can type the values in yourself.";
   } else if (issues.includes("missing")) {
     const missing = fieldOrder.filter((f) => cellStatus(row, f.key) === "missing").map((f) => f.label);
     explanation = `${missing.join(", ")} ${missing.length > 1 ? "weren't" : "wasn't"} found. Type ${missing.length > 1 ? "them" : "it"} in if you can see ${missing.length > 1 ? "them" : "it"} in the document, or leave blank. Nothing is guessed.`;
@@ -402,11 +407,15 @@ function SourcePreview({ row, pdf, onVerify }: { row: ExtractedRow; pdf: PDFDocu
     const reasons = [
       row.lowConfidence.includes("date") && "The date could be read two ways (day/month or month/day).",
       row.lowConfidence.includes("supplier") && "The supplier wasn't labelled, so it was taken from the heading.",
+      row.ocr &&
+        row.lowConfidence.some((k) => k !== "date" && k !== "supplier") &&
+        "Text recognition (OCR) wasn't sure it read some characters correctly.",
     ].filter(Boolean);
     explanation = `${unsure} ${row.lowConfidence.length > 1 ? "need" : "needs"} a check. ${reasons.join(" ")} Compare with the page, then mark as verified.`;
   } else if (row.verified) {
     explanation = "You checked this row against the document.";
   }
+  if (row.ocr && !row.scanned) explanation = `Read from a scanned image with text recognition (OCR). ${explanation}`;
 
   return (
     <section aria-label="Source preview" className="flex flex-wrap items-start gap-5 rounded-[18px] border border-line bg-surface p-5">

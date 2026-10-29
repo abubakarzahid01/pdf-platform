@@ -4,7 +4,8 @@ An all-in-one web platform to edit, convert, organise and extract data from PDF,
 
 > Status: **Phases 1–5 complete.** Upload checks, viewing, merge/split/rotate/organise/compress,
 > and an editor with annotations, added text, images, shapes, links and existing-text editing.
-> Next: Phase 6 (smart extraction).
+> Phase 6 (smart extraction): PDF to text, Excel and CSV, invoice extraction with review, and OCR for
+> scanned pages are done.
 
 ## Running locally
 
@@ -84,9 +85,9 @@ Every significant library must be safe for commercial, closed-source use.
 | Font embedding | @pdf-lib/fontkit | MIT | ✅ add text (Phase 5) |
 | Font for added text | Inter via @expo-google-fonts/inter | OFL-1.1 (font), MIT (package) | ✅ embedded in full; subsetting damaged glyphs |
 | Automated tests | Vitest | MIT | ✅ installed (dev only) |
-| Excel / CSV export | ExcelJS, PapaParse | MIT | Phase 6 |
+| Excel / CSV export | Own small XLSX/CSV writer on fflate | MIT | ✅ PDF to Excel/CSV, invoice export (Phase 6) |
 | Office → PDF | LibreOffice (headless, server) | MPL-2.0 | Conversion phase |
-| OCR | Tesseract | Apache-2.0 | Phase 6 |
+| OCR | tesseract.js 7 + tesseract.js-core; English data from @tesseract.js-data/eng | Apache-2.0 (engine), MIT (data package; Tesseract model Apache-2.0) | ✅ scanned pages, in the browser, served from /ocr (Phase 6) |
 | Compression | pdf-lib + browser canvas (image recompression) | MIT | ✅ in the browser (Phase 4) |
 | Test images | jpeg-js | BSD-3-Clause | ✅ installed (dev only) |
 | Standard font metrics | @pdf-lib/standard-fonts | MIT | ✅ existing-text editing (Phase 5) |

@@ -3,7 +3,8 @@ import type { TextItem } from "./text-items";
 // A run of text on a line, separated from its neighbours by a wide gap (a column break).
 export type Cell = { text: string; x: number; end: number };
 
-export type LayoutLine = { y: number; size: number; cells: Cell[] };
+// `confidence` is the lowest OCR confidence on the line (absent for real PDF text).
+export type LayoutLine = { y: number; size: number; cells: Cell[]; confidence?: number };
 
 // Bullet characters that Word and others draw with the Symbol/Wingdings fonts (private-use codes).
 const SYMBOL_BULLETS = /[]/g;
@@ -51,6 +52,8 @@ export function layoutLines(items: TextItem[]): LayoutLine[] {
       }
     }
     for (const c of cells) c.text = c.text.trim();
-    return { y: group[0].y, size: Math.max(...group.map((i) => i.size)), cells };
+    const scores = group.flatMap((i) => (i.confidence === undefined ? [] : [i.confidence]));
+    const confidence = scores.length ? Math.min(...scores) : undefined;
+    return { y: group[0].y, size: Math.max(...group.map((i) => i.size)), cells, ...(confidence === undefined ? {} : { confidence }) };
   });
 }

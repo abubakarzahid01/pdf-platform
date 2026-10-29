@@ -207,8 +207,8 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
             onChange={set("breaks")}
           />
           <p className="text-[13px] text-subtle">
-            Text is put in reading order, line by line. Table columns are kept apart with extra spaces. Scanned pages have no
-            text yet; text recognition (OCR) comes next.
+            Text is put in reading order, line by line. Table columns are kept apart with extra spaces. Scanned pages are read
+            with text recognition (OCR), in your browser.
           </p>
         </Field>
       );

@@ -74,12 +74,27 @@ const LABELS = {
   supplier: /\b(?:supplier|from|seller|vendor|billed?\s+by)\s*:/i,
 };
 
+// OCR word confidence (0–100) below which a value is marked for checking.
+export const OCR_SURE = 85;
+
+// For text read by OCR: true when every word of the value, on or just below its label's
+// line, was recognised confidently. Real PDF text has no confidence and always passes.
+function ocrSure(page: PageItems, value: string, line: Line) {
+  const words = page.items.filter(
+    (i) => i.confidence !== undefined && i.str.trim() && value.includes(i.str.trim()) && i.y > line.y - line.size && i.y < line.y + line.size * 2.5,
+  );
+  return words.every((w) => (w.confidence ?? 100) >= OCR_SURE);
+}
+
 /** Extracts one invoice's fields from its pages. */
 export function extractInvoice(pages: PageItems[], fileName: string, id: string): ExtractedRow {
   const lines: Line[] = pages.slice(0, 5).flatMap((p, page) => layoutLines(p.items).map((l) => ({ ...l, page, text: lineText(l) })));
   const found: Partial<Record<InvoiceField, Found>> = {};
-  const take = (field: InvoiceField, value: string | null, page: number, confident: boolean) => {
-    if (value && !found[field]) found[field] = { value: value.trim(), page, confident };
+  const take = (field: InvoiceField, value: string | null, page: number, confident: boolean, line?: Line) => {
+    if (value && !found[field]) {
+      const sure = confident && (!line || ocrSure(pages[page], value.trim(), line));
+      found[field] = { value: value.trim(), page, confident: sure };
+    }
   };
 
   lines.forEach((line, i) => {
@@ -87,21 +102,21 @@ export function extractInvoice(pages: PageItems[], fileName: string, id: string)
     // Invoice number: a labelled code, or a code right after a heading word "Invoice".
     const no = afterLabel(lines, i, LABELS.invoiceNo);
     const code = no && /^[A-Z0-9][A-Z0-9/-]*\d[A-Z0-9/-]*/i.exec(no);
-    if (code) take("invoiceNo", code[0], line.page, true);
+    if (code) take("invoiceNo", code[0], line.page, true, line);
     const heading = /^\s*invoice\s+([A-Z]{1,5}[-/]?\d[\w/-]*)\b/i.exec(t);
-    if (heading) take("invoiceNo", heading[1], line.page, true);
+    if (heading) take("invoiceNo", heading[1], line.page, true, line);
 
     const dateText = afterLabel(lines, i, LABELS.date);
     const date = dateText && parseDate(dateText);
-    if (date) take("date", date.value, line.page, date.clear);
+    if (date) take("date", date.value, line.page, date.clear, line);
 
     // Amount lines: subtotal and VAT before total, so "Subtotal" isn't read as the total.
-    if (LABELS.subtotal.test(t)) take("subtotal", money(afterLabel(lines, i, LABELS.subtotal) ?? ""), line.page, true);
-    else if (LABELS.vat.test(t) && !/\b(?:reg|registration)\b/i.test(t)) take("vat", money(afterLabel(lines, i, LABELS.vat) ?? ""), line.page, true);
-    else if (LABELS.total.test(t)) take("total", money(afterLabel(lines, i, LABELS.total) ?? ""), line.page, true);
+    if (LABELS.subtotal.test(t)) take("subtotal", money(afterLabel(lines, i, LABELS.subtotal) ?? ""), line.page, true, line);
+    else if (LABELS.vat.test(t) && !/\b(?:reg|registration)\b/i.test(t)) take("vat", money(afterLabel(lines, i, LABELS.vat) ?? ""), line.page, true, line);
+    else if (LABELS.total.test(t)) take("total", money(afterLabel(lines, i, LABELS.total) ?? ""), line.page, true, line);
 
     const supplier = afterLabel(lines, i, LABELS.supplier);
-    if (supplier) take("supplier", supplier.split(/\s{2,}|·/)[0], line.page, true);
+    if (supplier) take("supplier", supplier.split(/\s{2,}|·/)[0], line.page, true, line);
   });
 
   // No supplier label: the first prominent line that isn't the word "Invoice" is likely
@@ -121,5 +136,6 @@ export function extractInvoice(pages: PageItems[], fileName: string, id: string)
   }
   const page = found.total?.page ?? found.invoiceNo?.page ?? 0;
   const hasText = lines.length > 0;
-  return { id, fileName, page: page + 1, scanned: !hasText, values, lowConfidence, verified: false };
+  const ocr = pages.slice(0, 5).some((p) => p.ocr);
+  return { id, fileName, page: page + 1, scanned: !hasText, ocr, values, lowConfidence, verified: false };
 }

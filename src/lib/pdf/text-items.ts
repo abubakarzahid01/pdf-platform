@@ -8,9 +8,12 @@ export type TextItem = {
   width: number;
   size: number; // font size on the page
   hasEOL: boolean;
+  confidence?: number; // 0–100, only for text read by OCR
 };
 
-export type PageItems = { width: number; height: number; items: TextItem[] };
+// `ocr`: true when the page had no text and its words were read from the image with OCR;
+// false when it had no text but was skipped (over the OCR page limit).
+export type PageItems = { width: number; height: number; items: TextItem[]; ocr?: boolean };
 
 // PDF.js's matrix helper; passed in so the browser and Node builds can share this code.
 type Transform = (m1: number[], m2: number[]) => number[];

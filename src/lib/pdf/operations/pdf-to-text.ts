@@ -1,4 +1,5 @@
 import type { PageItems, TextItem } from "../text-items";
+import { OCR_MAX_PAGES } from "../../ocr/ocr";
 import { layoutLines } from "../text-layout";
 import { baseName, type InputPdf, type OutputFile } from "./types";
 
@@ -23,12 +24,18 @@ export function pageText(items: TextItem[]): string {
   return out.join("\n");
 }
 
-// Counts pages without text, for honest notes about scanned pages.
-export function scannedNote(pages: string[], whatNext = "text recognition (OCR) is coming next in this phase") {
-  const empty = pages.filter((t) => !t.trim()).length;
-  if (empty === 0) return "";
-  if (empty === pages.length) return `No text was found. This PDF may be scanned images of pages; ${whatNext}.`;
-  return `${empty} page${empty === 1 ? " has" : "s have"} no text and may be scanned; ${whatNext}.`;
+// Honest notes about scanned pages: which were read with OCR, and which still have no text.
+export function scannedNote(pages: PageItems[], texts: string[]) {
+  const pagesWord = (n: number, one: string, many: string) => `${n} page${n === 1 ? one : many}`;
+  const notes: string[] = [];
+  const read = pages.filter((p, i) => p.ocr && texts[i].trim()).length;
+  if (read) notes.push(`${pagesWord(read, " was", "s were")} scanned and read with text recognition (OCR). Check names and numbers against the original.`);
+  const skipped = pages.filter((p) => p.ocr === false).length;
+  if (skipped) notes.push(`${pagesWord(skipped, " wasn't", "s weren't")} read: text recognition reads up to ${OCR_MAX_PAGES} scanned pages per file.`);
+  const empty = pages.filter((p, i) => p.ocr !== false && !texts[i].trim()).length;
+  if (empty === pages.length) notes.push("No text was found, even with text recognition (OCR). The pages may be blank, or the scan too unclear to read.");
+  else if (empty) notes.push(`${pagesWord(empty, " has", "s have")} no readable text, even with text recognition (OCR).`);
+  return notes.join(" ");
 }
 
 export async function pdfToText(input: InputPdf, breaks: PageBreaks, readItems: TextItemReader): Promise<OutputFile> {
@@ -38,7 +45,7 @@ export async function pdfToText(input: InputPdf, breaks: PageBreaks, readItems: 
   const content = parts.join("\n\n") + "\n";
 
   const characters = texts.reduce((n, t) => n + t.replace(/\s/g, "").length, 0);
-  const notes = [`${pages.length} page${pages.length === 1 ? "" : "s"}, ${characters.toLocaleString("en-GB")} characters of text.`, scannedNote(texts)];
+  const notes = [`${pages.length} page${pages.length === 1 ? "" : "s"}, ${characters.toLocaleString("en-GB")} characters of text.`, scannedNote(pages, texts)];
 
   return {
     name: `${baseName(input.name)}.txt`,

@@ -24,7 +24,7 @@ export async function pdfToSpreadsheet(
   const pages = await readItems(input.bytes);
   const base = baseName(input.name);
   const tables: Table[] = pages.flatMap((p, i) => detectTables(p.items, i));
-  const scanned = scannedNote(pages.map((p) => pageText(p.items)), "text recognition (OCR) is coming later in this phase");
+  const scanned = scannedNote(pages, pages.map((p) => pageText(p.items)));
 
   let groups: { label: string; rows: string[][]; header: boolean }[];
   let summary: string;
