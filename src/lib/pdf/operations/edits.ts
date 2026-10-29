@@ -2,6 +2,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { degrees, LineCapStyle, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { addAnnotations, type PdfAnnotation, type Rgb } from "./annotate";
 import { baseName, OperationError, type InputPdf, type OutputFile } from "./types";
+import { applyTextEdits, verifyTextEdits, type FallbackLine, type TextExtractor, type TextLineEdit } from "../text-edit/apply";
 
 export type FontFamily = "helvetica" | "times" | "courier" | "inter";
 export type InterStyle = "regular" | "bold" | "italic" | "boldItalic";
@@ -43,7 +44,20 @@ function isLineShape(s: PdfShape): s is PdfLineShape {
   return s.kind === "line" || s.kind === "arrow";
 }
 
-export type Edits = { texts: PdfText[]; annotations: PdfAnnotation[]; images?: PdfImage[]; shapes?: PdfShape[] };
+export type Edits = {
+  texts: PdfText[];
+  annotations: PdfAnnotation[];
+  images?: PdfImage[];
+  shapes?: PdfShape[];
+  // Changes to existing lines of text; `original` is the line's text before editing.
+  lineEdits?: (TextLineEdit & { original: string })[];
+};
+
+// Picks a standard font close to the original one for a line that can't keep its font.
+function fallbackText(line: FallbackLine): PdfText {
+  const family: FontFamily = /times|serif|georgia|garamond|cambria/i.test(line.baseFont) && !/sans/i.test(line.baseFont) ? "times" : /courier|mono/i.test(line.baseFont) ? "courier" : "helvetica";
+  return { page: line.page, lines: [{ text: line.text, x: line.x, y: line.y }], family, bold: line.bold, italic: line.italic, size: line.size, color: line.color, rotate: 0 };
+}
 
 const FILL_OPACITY = 0.25;
 const ARROW_ANGLE = (28 * Math.PI) / 180;
@@ -111,10 +125,26 @@ export async function applyEdits(
   input: InputPdf,
   edits: Edits,
   loadFont: FontLoader,
-): Promise<OutputFile & { substitutions: number }> {
+  // Reads text back from the saved file to confirm edits to existing text.
+  extractText?: TextExtractor,
+): Promise<OutputFile & { substitutions: number; fontFallbacks: number }> {
   const doc = await PDFDocument.load(input.bytes);
   doc.registerFontkit(fontkit);
   const pages = doc.getPages();
+
+  // Existing text first: it rewrites page content, which later drawing is added after.
+  const lineEdits = edits.lineEdits ?? [];
+  let fontFallbacks = 0;
+  const texts = [...edits.texts];
+  if (lineEdits.length > 0) {
+    try {
+      const result = applyTextEdits(doc, lineEdits);
+      fontFallbacks = result.fallbacks.length;
+      texts.unshift(...result.fallbacks.map(fallbackText));
+    } catch (error) {
+      throw new OperationError(error instanceof Error ? error.message : "The text changes couldn't be applied.");
+    }
+  }
 
   const standardCache = new Map<StandardFonts, PDFFont>();
   const interCache = new Map<InterStyle, PDFFont>();
@@ -160,7 +190,7 @@ export async function applyEdits(
   }
 
   let substitutions = 0;
-  for (const t of edits.texts) {
+  for (const t of texts) {
     const page = pages[t.page];
     if (!page) throw new OperationError("Some text refers to a page that doesn't exist.");
     const lines = t.lines.filter((l) => l.text.length > 0);
@@ -192,5 +222,13 @@ export async function applyEdits(
 
   addAnnotations(doc, edits.annotations);
   const bytes = await doc.save();
-  return { name: `${baseName(input.name)}-edited.pdf`, bytes, pageCount: doc.getPageCount(), substitutions };
+
+  // Never hand back a file where a text edit didn't take effect.
+  if (lineEdits.length > 0) {
+    if (!extractText) throw new OperationError("Text changes can't be checked, so the file wasn't created.");
+    const problem = await verifyTextEdits(input.bytes, bytes, lineEdits, extractText);
+    if (problem) throw new OperationError(`${problem} The file wasn't created, so nothing incorrect was downloaded.`);
+  }
+
+  return { name: `${baseName(input.name)}-edited.pdf`, bytes, pageCount: doc.getPageCount(), substitutions, fontFallbacks };
 }

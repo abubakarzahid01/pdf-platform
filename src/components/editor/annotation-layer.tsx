@@ -9,6 +9,7 @@ import {
   arrowHead,
   cssFont,
   shapeBox,
+  type EditableLine,
   type ShapeStyle,
   describe,
   fontFamilies,
@@ -42,6 +43,9 @@ type Props = {
   onText: (id: string, text: string) => void;
   onRequestImage: (page: number, x: number, y: number) => void;
   onResize: (id: string, w: number, h: number) => void;
+  // Existing lines that can be edited (shown with the Edit text tool).
+  editableLines?: EditableLine[];
+  onEditLine: (line: EditableLine) => void;
 };
 
 type Draft =
@@ -56,7 +60,7 @@ const MIN_IMAGE = 16;
 const HANDLE = 10; // resize handle size in screen pixels
 
 function bounds(a: ViewAnnotation) {
-  if (a.type === "highlight" || a.type === "image" || a.type === "link") return { x: a.x, y: a.y, w: a.w, h: a.h };
+  if (a.type === "highlight" || a.type === "image" || a.type === "link" || a.type === "lineEdit") return { x: a.x, y: a.y, w: a.w, h: a.h };
   if (a.type === "shape") return shapeBox(a);
   if (a.type === "comment") return { x: a.x, y: a.y, w: COMMENT_SIZE, h: COMMENT_SIZE };
   if (a.type === "text") {
@@ -226,6 +230,8 @@ export function AnnotationLayer(props: Props) {
     if (!selecting || e.button !== 0) return;
     e.stopPropagation();
     props.onSelect(id);
+    // Edited lines stay where the original line was, so they can't be dragged.
+    if (items.find((a) => a.id === id)?.type === "lineEdit") return;
     capture(e);
     setMove({ id, start: point(e), dx: 0, dy: 0 });
   };
@@ -244,7 +250,26 @@ export function AnnotationLayer(props: Props) {
   });
   const selected = shown.find((a) => a.id === selectedId);
   const sel = selected && selected.id !== editingId ? bounds(selected) : null;
-  const editing = shown.find((a) => a.id === editingId && a.type === "text") as Extract<ViewAnnotation, { type: "text" }> | undefined;
+  const editingItem = shown.find((a) => a.id === editingId && (a.type === "text" || a.type === "lineEdit"));
+  // Typing position and style, shared by new text boxes and edited lines.
+  const editing = editingItem
+    ? editingItem.type === "text"
+      ? { id: editingItem.id, text: editingItem.text, x: editingItem.x, y: editingItem.y, size: editingItem.size, color: editingItem.color, font: cssFont(editingItem), multiline: true, width: measureText(editingItem.text || "Type here", editingItem) }
+      : editingItem.type === "lineEdit"
+        ? {
+            id: editingItem.id,
+            text: editingItem.text,
+            x: editingItem.x,
+            y: editingItem.baseline - editingItem.size * TEXT_ASCENT,
+            size: editingItem.size,
+            color: editingItem.color,
+            font: `${editingItem.italic ? "italic " : ""}${editingItem.bold ? 700 : 400} ${editingItem.size}px ${editingItem.fontCss}`,
+            multiline: false,
+            width: Math.max(editingItem.w, editingItem.text.length * editingItem.size * 0.55),
+          }
+        : null
+    : null;
+  const editedLineIds = new Set(items.flatMap((a) => (a.type === "lineEdit" ? [a.lineId] : [])));
 
   return (
     <svg
@@ -265,7 +290,7 @@ export function AnnotationLayer(props: Props) {
         cursor: tool === "comment" || tool === "image" ? "copy" : tool === "add-text" ? "text" : drawing ? "crosshair" : "default",
         // Drawing tools take over touch input; otherwise touch scrolls the page.
         touchAction: dragging || move || resize ? "none" : "auto",
-        pointerEvents: drawing || selecting || editingId ? "auto" : "none",
+        pointerEvents: drawing || selecting || editingId || tool === "edit-text" ? "auto" : "none",
       }}
       aria-label={`Annotations on page ${page + 1}`}
       role="group"
@@ -277,6 +302,27 @@ export function AnnotationLayer(props: Props) {
         };
         if (a.type === "highlight") {
           return <rect key={a.id} {...common} x={a.x} y={a.y} width={a.w} height={a.h} fill={a.color} fillOpacity={0.45} style={{ ...common.style, mixBlendMode: "multiply" }} />;
+        }
+        if (a.type === "lineEdit") {
+          if (a.id === editingId) return <rect key={a.id} x={a.x - 1} y={a.y - 1} width={a.w + 2} height={a.h + 2} fill="#ffffff" />;
+          return (
+            <g key={a.id} {...common} onDoubleClick={() => selecting && props.onEdit(a.id)}>
+              {/* Editor preview only: hides the old line on screen. In the saved PDF the old text is removed. */}
+              <rect x={a.x - 1} y={a.y - 1} width={a.w + 2} height={a.h + 2} fill="#ffffff" />
+              <text
+                x={a.x}
+                y={a.baseline}
+                fill={a.color}
+                fontFamily={a.fontCss}
+                fontSize={a.size}
+                fontWeight={a.bold ? 700 : 400}
+                fontStyle={a.italic ? "italic" : "normal"}
+                style={{ whiteSpace: "pre" }}
+              >
+                {a.text}
+              </text>
+            </g>
+          );
         }
         if (a.type === "shape") {
           return (
@@ -357,6 +403,32 @@ export function AnnotationLayer(props: Props) {
         );
       })}
 
+      {tool === "edit-text" &&
+        props.editableLines
+          ?.filter((l) => !editedLineIds.has(l.id))
+          .map((l) => (
+            <rect
+              key={`line-${l.id}`}
+              x={l.x - 2}
+              y={l.y - 1}
+              width={l.w + 4}
+              height={l.h + 2}
+              rx={2 / scale}
+              className="cursor-text fill-transparent stroke-transparent hover:fill-brand/10 hover:stroke-brand"
+              strokeWidth={1 / scale}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+                // Keep focus on the edit box that is about to open.
+                e.preventDefault();
+                props.onEditLine(l);
+              }}
+              aria-label={`Edit text: ${l.text}`}
+            >
+              <title>{l.text}</title>
+            </rect>
+          ))}
+
       {editing && (
         // A real text field placed on the page; it scales with the zoom like the page does.
         <foreignObject x={editing.x - 2} y={editing.y - 2} width={Math.max(40, width - editing.x)} height={Math.max(editing.size * 2, height - editing.y)}>
@@ -366,17 +438,21 @@ export function AnnotationLayer(props: Props) {
             value={editing.text}
             placeholder="Type here"
             onPointerDown={(e) => e.stopPropagation()}
-            onChange={(e) => props.onText(editing.id, e.target.value)}
+            onChange={(e) => props.onText(editing.id, editing.multiline ? e.target.value : e.target.value.replace(/\n/g, ""))}
             onKeyDown={(e) => {
-              if (e.key === "Escape") props.onEdit(null);
+              // Edited lines are single lines: Enter finishes, like Esc.
+              if (e.key === "Escape" || (!editing.multiline && e.key === "Enter")) {
+                e.preventDefault();
+                props.onEdit(null);
+              }
             }}
             onBlur={() => props.onEdit(null)}
             rows={Math.max(1, textLines(editing.text).length)}
             style={{
-              font: cssFont(editing),
+              font: editing.font,
               lineHeight: TEXT_LINE_HEIGHT,
               color: editing.color,
-              width: Math.max(editing.size * 4, measureText(editing.text || "Type here", editing) + editing.size),
+              width: Math.max(editing.size * 4, editing.width + editing.size),
               padding: 2,
               margin: 0,
               border: `${1.5 / scale}px dashed #5a47e0`,

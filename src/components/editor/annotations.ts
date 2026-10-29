@@ -18,7 +18,40 @@ export type ViewAnnotation =
   // Shapes keep the two points they were dragged between; rectangles and ellipses fill that box.
   | ({ id: string; page: number; type: "shape"; x1: number; y1: number; x2: number; y2: number } & ShapeStyle)
   // A link either opens a web address or jumps to a page (zero-based).
-  | { id: string; page: number; type: "link"; x: number; y: number; w: number; h: number; mode: "url" | "page"; url: string; targetPage: number };
+  | { id: string; page: number; type: "link"; x: number; y: number; w: number; h: number; mode: "url" | "page"; url: string; targetPage: number }
+  // A change to an existing line. The box covers the original line; the PDF line is removed on save.
+  | {
+      id: string;
+      page: number;
+      type: "lineEdit";
+      lineId: number;
+      original: string;
+      text: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      baseline: number;
+      size: number;
+      fontCss: string;
+      bold: boolean;
+      italic: boolean;
+      color: string;
+    };
+
+// An existing line that can be edited, in view coordinates.
+export type EditableLine = { id: number; text: string; x: number; y: number; w: number; h: number; baseline: number; size: number; baseFont: string; bold: boolean; italic: boolean; color: string };
+
+// A similar on-screen font for a font name found in a PDF.
+export function cssFamilyFor(baseFont: string) {
+  if (/courier|mono/i.test(baseFont)) return "'Courier New', Courier, monospace";
+  if (/times|serif|georgia|garamond|cambria/i.test(baseFont) && !/sans/i.test(baseFont)) return "'Times New Roman', Times, serif";
+  return "Arial, Helvetica, sans-serif";
+}
+
+export function rgbToHex([r, g, b]: [number, number, number]) {
+  return `#${[r, g, b].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0")).join("")}`;
+}
 
 export type ShapeKind = "rect" | "ellipse" | "line" | "arrow";
 export type ShapeStyle = { kind: ShapeKind; color: string; lineWidth: number; fill: boolean };
@@ -173,6 +206,7 @@ export function toPdfText(a: Extract<ViewAnnotation, { type: "text" }>, viewport
 
 // Moves any item by (dx, dy) in view units.
 export function translate(a: ViewAnnotation, dx: number, dy: number): ViewAnnotation {
+  if (a.type === "lineEdit") return a; // edited lines stay where the original line was
   if (a.type === "ink") return { ...a, points: a.points.map(([x, y]) => [x + dx, y + dy] as [number, number]) };
   if (a.type === "shape") return { ...a, x1: a.x1 + dx, y1: a.y1 + dy, x2: a.x2 + dx, y2: a.y2 + dy };
   return { ...a, x: a.x + dx, y: a.y + dy };
@@ -180,5 +214,5 @@ export function translate(a: ViewAnnotation, dx: number, dy: number): ViewAnnota
 
 export function describe(a: ViewAnnotation) {
   if (a.type === "shape") return shapeKinds.find((k) => k.value === a.kind)?.label ?? "Shape";
-  return { highlight: "Highlight", ink: "Drawing", comment: "Comment", text: "Text", image: "Image", link: "Link" }[a.type];
+  return { highlight: "Highlight", ink: "Drawing", comment: "Comment", text: "Text", image: "Image", link: "Link", lineEdit: "Edited text" }[a.type];
 }

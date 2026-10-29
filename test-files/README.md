@@ -7,6 +7,7 @@ Generated files for checking uploads, validation and rendering. Not real documen
 | `sample-3-pages.pdf` | Normal text PDF | Opens, 3 pages |
 | `mixed-sizes.pdf` | A4 portrait, A4 landscape, rotated Letter page | Each page shows at its own size and rotation |
 | `long-150-pages.pdf` | Long document within the limit | Opens; pages render as you scroll |
+| `edge-invoice.pdf` | Real-world-style PDF from Microsoft Edge (`edge-invoice.html`): subset CID fonts, text stored as glyph codes | Every line found and editable; edits keep the original font when it has the letters |
 | `images-heavy.pdf` | Two large photo-like images (JPEG and lossless) plus text | Compresses to a much smaller file; text unchanged |
 | `too-many-pages-250.pdf` | Over the free page limit (200) | Rejected with a page-limit message |
 | `broken-truncated.pdf` | A real PDF cut off halfway | Rejected as damaged |

@@ -38,11 +38,43 @@ type Props = {
   onShapeStyle: (patch: Partial<ShapeStyle>) => void;
   onLinkChange: (id: string, patch: { mode?: "url" | "page"; url?: string; targetPage?: number }) => void;
   pageCount: number;
+  // Edit text tool: whether lines are being found, and what was found on the current page.
+  textLinesStatus: { loading: boolean; editableOnPage: number; problem?: string; page: number };
 };
 
-const comingLater: Partial<Record<EditorTool, string>> = {
-  "edit-text": "Click existing text to change it. The original text is removed and rewritten, never covered with a white box.",
-};
+const comingLater: Partial<Record<EditorTool, string>> = {};
+
+function EditTextHelp({ status }: { status: Props["textLinesStatus"] }) {
+  return (
+    <>
+      <p className="text-sm text-muted">Click a line of text on the page to change it. Press Enter or Esc when done.</p>
+      {status.loading ? (
+        <p role="status" className="text-sm text-subtle">Finding text on the pages…</p>
+      ) : status.problem ? (
+        <p className="rounded-[10px] border border-warn/25 bg-warn-soft px-3 py-2 text-sm text-warn">{status.problem}</p>
+      ) : status.editableOnPage === 0 ? (
+        <p className="rounded-[10px] border border-warn/25 bg-warn-soft px-3 py-2 text-sm text-warn">
+          No editable text on page {status.page + 1}. If it&apos;s a scanned page, its text is an image; text recognition (OCR) comes in Phase 6.
+        </p>
+      ) : (
+        <p className="text-xs text-subtle">
+          {status.editableOnPage} editable line{status.editableOnPage > 1 ? "s" : ""} on page {status.page + 1}. Hover to see them.
+        </p>
+      )}
+      <div className="flex gap-2.5 rounded-xl bg-info-soft p-3.5 text-[13px] leading-normal text-info-strong">
+        <Info className="mt-0.5 size-[18px] shrink-0" aria-hidden="true" />
+        <span>
+          When you download, the original line is removed from the PDF (not covered up) and your text is written in its
+          place, in the original font when it has all your letters. Every change is checked before the file is created.
+        </span>
+      </div>
+      <p className="text-xs text-subtle">
+        Not yet supported: rotated or slanted text, text inside embedded graphics, and right-to-left scripts. Text
+        doesn&apos;t reflow, so a much longer line may run past its space.
+      </p>
+    </>
+  );
+}
 
 function ShapeControls({ style, onChange }: { style: ShapeStyle; onChange: (patch: Partial<ShapeStyle>) => void }) {
   const closed = style.kind === "rect" || style.kind === "ellipse";
@@ -265,6 +297,20 @@ export function PropertiesPanel(props: Props) {
           <strong className="text-sm">Selected: {describe(selected).toLowerCase()}</strong>
           <span className="text-xs text-subtle">Page {selected.page + 1}</span>
         </div>
+        {selected.type === "lineEdit" && (
+          <div className="flex flex-col gap-2 text-xs text-subtle">
+            <span>
+              Original: <span className="text-ink-soft">“{selected.original}”</span>
+            </span>
+            <span>
+              New: <span className="text-ink-soft">{selected.text ? `“${selected.text}”` : "(line removed)"}</span>
+            </span>
+            {selected.text.length > selected.original.length * 1.3 + 3 && (
+              <span className="text-warn">This line is much longer than the original and may run into nearby text.</span>
+            )}
+            <span>Double-click the text to change it again.</span>
+          </div>
+        )}
         {selected.type === "shape" && <ShapeControls style={selected} onChange={props.onShapeStyle} />}
         {selected.type === "link" && (
           <LinkControls link={selected} pageCount={props.pageCount} onChange={(patch) => props.onLinkChange(selected.id, patch)} />
@@ -303,7 +349,8 @@ export function PropertiesPanel(props: Props) {
           onClick={() => props.onDelete(selected.id)}
           className="inline-flex items-center justify-center gap-2 rounded-[10px] border border-danger/25 bg-danger-soft px-3 py-2.5 text-sm font-semibold text-danger hover:border-danger/50"
         >
-          <Trash2 className="size-4" aria-hidden="true" /> Delete {describe(selected).toLowerCase()}
+          <Trash2 className="size-4" aria-hidden="true" />{" "}
+          {selected.type === "lineEdit" ? "Undo this change (keep the original)" : `Delete ${describe(selected).toLowerCase()}`}
         </button>
         <Shortcuts />
       </>
@@ -354,6 +401,13 @@ export function PropertiesPanel(props: Props) {
       return (
         <>
           <p className="text-sm text-muted">Click on the page where you want a comment, then type it here.</p>
+          <Shortcuts />
+        </>
+      );
+    case "edit-text":
+      return (
+        <>
+          <EditTextHelp status={props.textLinesStatus} />
           <Shortcuts />
         </>
       );
@@ -409,7 +463,7 @@ export function PropertiesPanel(props: Props) {
           <p className="text-sm text-muted">{comingLater[tool]}</p>
           <div className="flex gap-2.5 rounded-xl bg-info-soft p-3.5 text-[13px] leading-normal text-info-strong">
             <Info className="mt-0.5 size-[18px] shrink-0" aria-hidden="true" />
-            <span>Editing existing text arrives in the next step of Phase 5. All other tools work now.</span>
+            <span>This tool isn&apos;t available yet.</span>
           </div>
         </>
       );

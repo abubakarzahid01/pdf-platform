@@ -40,23 +40,26 @@ import {
   inkColors,
   newId,
   toPdfAnnotation,
+  cssFamilyFor,
   normaliseUrl,
+  rgbToHex,
   toPdfImage,
   toPdfLink,
   toPdfShape,
   toPdfText,
   translate,
+  type EditableLine,
   type NewAnnotation,
   type ShapeStyle,
   type TextStyle,
   type ViewAnnotation,
 } from "@/components/editor/annotations";
 import { applyEdits } from "@/lib/pdf/operations/edits";
+import { OperationError } from "@/lib/pdf/operations/types";
 import { downloadBytes } from "@/lib/files/download";
 import { prepareImage } from "@/lib/files/prepare-image";
 
-// Tools that work now; editing existing text arrives in the next step of Phase 5.
-const workingTools = new Set<EditorTool>(["select", "add-text", "image", "shape", "link", "highlight", "draw", "comment"]);
+const workingTools = new Set<EditorTool>(["select", "edit-text", "add-text", "image", "shape", "link", "highlight", "draw", "comment"]);
 
 // New images start at most this share of the page's width and height.
 const IMAGE_MAX_SHARE = 0.4;
@@ -138,6 +141,10 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  // Existing lines that can be edited, per page; found when the Edit text tool is first used.
+  const [textLines, setTextLines] = useState<Map<number, EditableLine[]> | null>(null);
+  const [textLinesLoading, setTextLinesLoading] = useState(false);
+  const [textLinesProblem, setTextLinesProblem] = useState<string | undefined>(undefined);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Where the next chosen image goes; no x/y means the middle of the page.
   const pendingImage = useRef<{ page: number; x?: number; y?: number } | null>(null);
@@ -190,6 +197,80 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     commit(annotations.map((a) => (a.id === id && a.type === "image" ? { ...a, w, h } : a)));
   }
 
+  async function loadTextLines() {
+    if (textLines || textLinesLoading || !sizes) return;
+    setTextLinesLoading(true);
+    try {
+      const [{ PDFDocument }, { readPageText }] = await Promise.all([import("pdf-lib"), import("@/lib/pdf/text-edit/lines")]);
+      const pdf = await PDFDocument.load(new Uint8Array(await doc.file.arrayBuffer()));
+      const map = new Map<number, EditableLine[]>();
+      for (let page = 0; page < pdf.getPageCount(); page++) {
+        const viewport = sizes[page].viewport!;
+        // Version 1 edits upright text on pages without their own rotation.
+        if (((viewport.rotation % 360) + 360) % 360 !== 0) {
+          map.set(page, []);
+          continue;
+        }
+        const lines = readPageText(pdf, page).lines.filter((l) => l.editable);
+        map.set(
+          page,
+          lines.map((l) => {
+            const [x, baseline] = viewport.convertToViewportPoint(l.x, l.y) as [number, number];
+            return {
+              id: l.id,
+              text: l.text,
+              x,
+              y: baseline - l.size * 0.85,
+              w: Math.max(l.width, l.size),
+              h: l.size * 1.1,
+              baseline,
+              size: l.size,
+              baseFont: l.baseFont,
+              bold: l.bold,
+              italic: l.italic,
+              color: rgbToHex(l.color),
+            };
+          }),
+        );
+      }
+      setTextLines(map);
+    } catch {
+      setTextLinesProblem("The text in this PDF couldn't be read for editing.");
+    } finally {
+      setTextLinesLoading(false);
+    }
+  }
+
+  function editLine(page: number, line: EditableLine) {
+    const existing = annotations.find((a) => a.type === "lineEdit" && a.page === page && a.lineId === line.id);
+    if (existing) {
+      setSelectedId(existing.id);
+      setEditingId(existing.id);
+      return;
+    }
+    const item: ViewAnnotation = {
+      id: newId(),
+      page,
+      type: "lineEdit",
+      lineId: line.id,
+      original: line.text,
+      text: line.text,
+      x: line.x,
+      y: line.y,
+      w: line.w,
+      h: line.h,
+      baseline: line.baseline,
+      size: line.size,
+      fontCss: cssFamilyFor(line.baseFont),
+      bold: line.bold,
+      italic: line.italic,
+      color: line.color,
+    };
+    commit([...annotations, item]);
+    setSelectedId(item.id);
+    setEditingId(item.id);
+  }
+
   function requestImage(page: number, x?: number, y?: number) {
     pendingImage.current = { page, x, y };
     setImageError(null);
@@ -231,11 +312,13 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     });
   }
 
-  // Leaving a text box: an empty one is removed (no undo step, as it never held anything).
+  // Leaving a text box: an empty new box, or an edited line left unchanged, is removed
+  // (no undo step, as nothing was really changed).
   function finishEditing(id: string | null) {
     if (id === null && editingId) {
       const item = annotations.find((a) => a.id === editingId);
-      if (item?.type === "text" && !item.text.trim()) {
+      const nothingChanged = (item?.type === "text" && !item.text.trim()) || (item?.type === "lineEdit" && item.text === item.original);
+      if (item && nothingChanged) {
         setHistory((h) => ({ ...h, present: h.present.filter((a) => a.id !== item.id) }));
         setSelectedId(null);
       }
@@ -276,7 +359,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   function setItemText(id: string, text: string) {
     setHistory((h) => ({
       ...h,
-      present: h.present.map((a) => (a.id === id && (a.type === "comment" || a.type === "text") ? { ...a, text } : a)),
+      present: h.present.map((a) => (a.id === id && (a.type === "comment" || a.type === "text" || a.type === "lineEdit") ? { ...a, text } : a)),
     }));
   }
 
@@ -379,21 +462,35 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
         }
         return [];
       });
-      // The font files are only fetched when text is being saved.
-      const { browserFontLoader } = await import("@/lib/pdf/fonts-browser");
+      const lineEdits = annotations.flatMap((a) =>
+        a.type === "lineEdit" && a.text !== a.original ? [{ page: a.page, lineId: a.lineId, text: a.text, original: a.original }] : [],
+      );
+      // The font files and the text checker are only loaded when they're needed.
+      const [{ browserFontLoader }, { browserTextExtractor }] = await Promise.all([
+        import("@/lib/pdf/fonts-browser"),
+        import("@/lib/pdf/extract-text-browser"),
+      ]);
       const result = await applyEdits(
         { name: doc.file.name, bytes: new Uint8Array(await doc.file.arrayBuffer()) },
-        { texts, images, shapes, annotations: pdfAnnotations },
+        { texts, images, shapes, annotations: pdfAnnotations, lineEdits },
         browserFontLoader,
+        browserTextExtractor,
       );
       downloadBytes(result.bytes, result.name);
-      if (result.substitutions > 0) {
-        setSaveNotice(
-          `${result.substitutions} text box${result.substitutions > 1 ? "es use" : " uses"} characters the chosen font can't show, so Inter was used instead.`,
+      const notes: string[] = [];
+      if (result.fontFallbacks > 0) {
+        notes.push(
+          `${result.fontFallbacks} edited line${result.fontFallbacks > 1 ? "s use" : " uses"} a similar font, because the original font in the file doesn't include every letter typed.`,
         );
       }
-    } catch {
-      setSaveError("The edited PDF couldn't be created. Your changes are still here; please try again.");
+      if (result.substitutions > 0) {
+        notes.push(`${result.substitutions} text${result.substitutions > 1 ? "s use" : " uses"} characters the chosen font can't show, so Inter was used instead.`);
+      }
+      if (notes.length) setSaveNotice(notes.join(" "));
+    } catch (error) {
+      setSaveError(
+        error instanceof OperationError ? error.message : "The edited PDF couldn't be created. Your changes are still here; please try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -483,6 +580,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                     // so style changes apply to the next item, not the previously selected one.
                     if (editingId) finishEditing(null);
                     if (t.id !== "select") setSelectedId(null);
+                    if (t.id === "edit-text") loadTextLines();
                     setTool(t.id);
                   }}
                   className={`flex min-w-14 flex-col items-center gap-[3px] rounded-[10px] px-2 py-1.5 text-[11px] font-medium ${
@@ -537,6 +635,8 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                   onText={setItemText}
                   onRequestImage={requestImage}
                   onResize={resizeAnnotation}
+                  editableLines={textLines?.get(i)}
+                  onEditLine={(line) => editLine(i, line)}
                 />
               )}
             />
@@ -615,6 +715,12 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             onShapeStyle={changeShapeStyle}
             onLinkChange={changeLink}
             pageCount={doc.pageCount}
+            textLinesStatus={{
+              loading: textLinesLoading,
+              problem: textLinesProblem,
+              page: page - 1,
+              editableOnPage: textLines?.get(page - 1)?.length ?? 0,
+            }}
           />
           <input
             ref={imageInputRef}
