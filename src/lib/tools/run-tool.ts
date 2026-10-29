@@ -2,12 +2,22 @@ import { compressPdf, type CompressLevel } from "@/lib/pdf/operations/compress";
 import { mergePdfs } from "@/lib/pdf/operations/merge";
 import { organizePdf, type PagePlan } from "@/lib/pdf/operations/organize";
 import { pdfToText, type PageBreaks } from "@/lib/pdf/operations/pdf-to-text";
+import { pdfToSpreadsheet, type TableLayout } from "@/lib/pdf/operations/pdf-to-spreadsheet";
 import { rotatePdf, type RotateAngle, type RotateWhich } from "@/lib/pdf/operations/rotate";
 import { splitPdf, type SplitMode } from "@/lib/pdf/operations/split";
 import type { InputPdf, OutputFile } from "@/lib/pdf/operations/types";
 
 // Tools whose processing is implemented. Everything runs in the browser.
-export const runnableTools = new Set(["merge-pdf", "split-pdf", "rotate-pdf", "organise-pages", "compress-pdf", "pdf-to-text"]);
+export const runnableTools = new Set([
+  "merge-pdf",
+  "split-pdf",
+  "rotate-pdf",
+  "organise-pages",
+  "compress-pdf",
+  "pdf-to-text",
+  "pdf-to-excel",
+  "pdf-to-csv",
+]);
 
 // Minimum number of valid files each tool needs.
 export function minimumFiles(slug: string) {
@@ -27,6 +37,12 @@ export async function runTool(slug: string, inputs: InputPdf[], options: Record<
     case "pdf-to-text": {
       const { browserTextItemReader } = await import("@/lib/pdf/text-items-browser");
       return [await pdfToText(inputs[0], options.breaks as PageBreaks, browserTextItemReader)];
+    }
+    case "pdf-to-excel":
+    case "pdf-to-csv": {
+      const { browserTextItemReader } = await import("@/lib/pdf/text-items-browser");
+      const layout: TableLayout = options.tables === "All in one sheet" ? "single" : "per-table";
+      return pdfToSpreadsheet(inputs[0], slug === "pdf-to-excel" ? "xlsx" : "csv", layout, browserTextItemReader);
     }
     case "compress-pdf": {
       // Loaded on demand: only the Compress tool needs the image recoder.

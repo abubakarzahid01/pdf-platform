@@ -24,7 +24,11 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
   const totalSize = outputs.reduce((n, o) => n + o.bytes.length, 0);
   // Outputs that aren't PDFs (text, spreadsheets) get their own preview and wording.
   const isText = single?.mime?.startsWith("text/plain");
-  const kind = single?.mime ? (isText ? "text file" : "file") : "PDF";
+  const format = single?.mime ? fileFormat(single.mime) : null;
+  const kind = format ? format.kind : "PDF";
+  const allPdf = outputs.every((o) => !o.mime);
+  const firstNote = outputs.find((o) => o.note)?.note;
+  const tablePreview = outputs.find((o) => o.table)?.table;
 
   return (
     <div className="flex flex-col gap-5 rounded-panel border border-success/25 bg-success-soft/40 p-6">
@@ -33,7 +37,11 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
           <CheckCircle2 className="size-6 shrink-0 text-success" aria-hidden="true" />
           <div className="flex flex-col">
             <strong className="text-[17px]">
-              {single?.unchanged ? "No changes needed" : single ? `Your ${kind} is ready` : `${outputs.length} PDFs are ready`}
+              {single?.unchanged
+                ? "No changes needed"
+                : single
+                  ? `Your ${kind} is ready`
+                  : `${outputs.length} ${allPdf ? "PDFs" : "files"} are ready`}
             </strong>
             <span className="text-sm text-muted">
               {single
@@ -50,11 +58,13 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
           className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-white hover:bg-brand-strong"
         >
           <Download className="size-4" aria-hidden="true" />
-          {single?.unchanged ? "Download original" : single ? `Download ${isText ? "TXT" : kind === "PDF" ? "PDF" : "file"}` : "Download all (ZIP)"}
+          {single?.unchanged ? "Download original" : single ? `Download ${format ? format.label : "PDF"}` : "Download all (ZIP)"}
         </button>
       </div>
 
-      {single?.note && <p className="text-sm text-ink-soft">{single.note}</p>}
+      {firstNote && <p className="text-sm text-ink-soft">{firstNote}</p>}
+
+      {tablePreview && <TablePreview rows={tablePreview} />}
 
       {single && isText ? (
         <TextPreview output={single} />
@@ -66,11 +76,12 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
             <li key={o.name} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-2.5">
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{o.name}</span>
               <span className="shrink-0 text-xs text-subtle">
-                {o.pageCount} page{o.pageCount > 1 ? "s" : ""} · {formatSize(o.bytes.length)}
+                {o.mime ? "" : `${o.pageCount} page${o.pageCount > 1 ? "s" : ""} · `}
+                {formatSize(o.bytes.length)}
               </span>
               <button
                 type="button"
-                onClick={() => downloadBytes(o.bytes, o.name)}
+                onClick={() => downloadBytes(o.bytes, o.name, o.mime)}
                 aria-label={`Download ${o.name}`}
                 className="flex size-9 shrink-0 items-center justify-center rounded-lg text-brand-strong hover:bg-brand-soft"
               >
@@ -89,6 +100,35 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
           Start over with new files
         </button>
       </div>
+    </div>
+  );
+}
+
+function fileFormat(mime: string) {
+  if (mime.startsWith("text/plain")) return { kind: "text file", label: "TXT" };
+  if (mime.startsWith("text/csv")) return { kind: "CSV file", label: "CSV" };
+  if (mime.includes("spreadsheetml")) return { kind: "Excel file", label: "Excel" };
+  return { kind: "file", label: "file" };
+}
+
+// The first rows of the first table found, as they'll appear in the spreadsheet.
+function TablePreview({ rows }: { rows: string[][] }) {
+  const width = Math.max(...rows.map((r) => r.length));
+  return (
+    <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+      <table className="w-full border-collapse text-[13px]">
+        <tbody>
+          {rows.map((row, r) => (
+            <tr key={r} className={r === 0 ? "bg-surface-soft font-semibold" : ""}>
+              {Array.from({ length: width }, (_, c) => (
+                <td key={c} className="whitespace-nowrap border-b border-r border-line-soft px-3 py-1.5 text-ink">
+                  {row[c] ?? ""}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -6,7 +6,8 @@ export type InputPdf = { name: string; bytes: Uint8Array };
 // `note` is an optional plain-language summary shown with the result.
 // `unchanged` marks an output that is the original file returned as-is.
 // `mime` is set for outputs that aren't PDFs (text, spreadsheets, ...).
-export type OutputFile = { name: string; bytes: Uint8Array; pageCount: number; note?: string; unchanged?: boolean; mime?: string };
+// `table` is a preview of tabular results (first rows of the first table).
+export type OutputFile = { name: string; bytes: Uint8Array; pageCount: number; note?: string; unchanged?: boolean; mime?: string; table?: string[][] };
 
 export class OperationError extends Error {
   constructor(message: string) {

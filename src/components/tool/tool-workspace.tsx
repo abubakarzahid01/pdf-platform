@@ -164,7 +164,12 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
     <div className="flex flex-wrap items-start gap-6">
       <section className="flex min-w-0 flex-[999_1_560px] flex-col gap-5">
         {outputs ? (
-          <ToolResult outputs={outputs} zipName={`${baseName(firstValid?.file.name ?? "document")}-split.zip`} onBack={invalidate} onReset={reset} />
+          <ToolResult
+            outputs={outputs}
+            zipName={`${baseName(firstValid?.file.name ?? "document")}-${slug === "pdf-to-csv" ? "tables" : "split"}.zip`}
+            onBack={invalidate}
+            onReset={reset}
+          />
         ) : hasFiles ? (
           <>
             <SelectedFiles

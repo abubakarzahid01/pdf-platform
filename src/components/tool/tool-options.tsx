@@ -177,7 +177,16 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
     case "pdf-to-csv":
       return (
         <Field label="Tables">
-          <Segmented options={["One sheet per table", "All in one sheet"]} value={text("tables")} onChange={set("tables")} />
+          <Segmented
+            options={slug === "pdf-to-csv" ? [{ value: "One sheet per table", label: "One file per table" }, { value: "All in one sheet", label: "All in one file" }] : ["One sheet per table", "All in one sheet"]}
+            value={text("tables")}
+            onChange={set("tables")}
+          />
+          <p className="text-[13px] text-subtle">
+            Tables are found from where the words sit on the page.{" "}
+            {slug === "pdf-to-excel" ? "Numbers and amounts like £45.00 become real numbers you can add up." : "Works with Excel, Google Sheets and Numbers."} If no
+            table is found, every line of text is kept in one column.
+          </p>
         </Field>
       );
     case "crop-pdf":
