@@ -5,8 +5,8 @@ import { Logo } from "@/components/logo";
 const navLinks = [
   { href: "/#tools", label: "All tools" },
   { href: "/tools/edit-pdf", label: "Edit PDF" },
-  { href: "/tools/ai-extraction", label: "AI Extract" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/tools/merge-pdf", label: "Merge PDF" },
+  { href: "/tools/invoice-to-excel", label: "Invoice to Excel" },
 ];
 
 export function SiteHeader() {

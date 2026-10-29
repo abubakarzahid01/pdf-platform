@@ -16,21 +16,17 @@ export function ExtractionShowcase() {
       <div className="grid grid-cols-1 items-center gap-14 lg:grid-cols-2">
         <div className="flex flex-col gap-5">
           <span className="self-start rounded-full bg-white/10 px-3 py-1.5 text-[13px] font-semibold text-[#d9d4ff]">
-            Smart extraction · Pro
+            Invoice to Excel
           </span>
           <h2 className="font-display text-3xl font-bold leading-tight tracking-tight sm:text-[40px]">
             Turn a pile of PDFs into one clean spreadsheet
           </h2>
           <p className="text-[17px] text-[#c9c7da]">
-            Upload invoices, receipts or statements and say what you need in plain English. Every value links back to
-            its source page, and anything missing or uncertain is flagged for review, never guessed.
+            Upload your invoices and get the supplier, invoice number, date and totals in one Excel or CSV file. Every
+            value links back to its source page, and anything missing or uncertain is flagged for review, never guessed.
           </p>
-          <blockquote className="rounded-[14px] border border-white/15 bg-white/5 px-[18px] py-4 text-[15px] text-[#edebfa]">
-            “Extract the supplier name, invoice number, invoice date and total from every PDF. Combine them into one
-            Excel file.”
-          </blockquote>
           <div className="flex flex-wrap gap-3">
-            <Link href="/tools/ai-extraction" className="rounded-xl bg-white px-[22px] py-3 font-semibold text-ink hover:bg-[#f2f1f8]">
+            <Link href="/tools/invoice-to-excel" className="rounded-xl bg-white px-[22px] py-3 font-semibold text-ink hover:bg-[#f2f1f8]">
               Try extraction
             </Link>
           </div>

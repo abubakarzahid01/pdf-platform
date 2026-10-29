@@ -18,9 +18,6 @@ export function ToolCard({ tool }: { tool: Tool }) {
         <span className={`flex size-10 items-center justify-center rounded-[10px] ${toneClasses[tool.tone]}`}>
           <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
         </span>
-        {tool.pro && (
-          <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-bold text-brand-strong">PRO</span>
-        )}
       </div>
       <strong className="text-base font-semibold text-ink">{tool.name}</strong>
       <span className="text-sm text-subtle">{tool.description}</span>

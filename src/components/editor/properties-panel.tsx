@@ -54,7 +54,7 @@ function EditTextHelp({ status }: { status: Props["textLinesStatus"] }) {
         <p className="rounded-[10px] border border-warn/25 bg-warn-soft px-3 py-2 text-sm text-warn">{status.problem}</p>
       ) : status.editableOnPage === 0 ? (
         <p className="rounded-[10px] border border-warn/25 bg-warn-soft px-3 py-2 text-sm text-warn">
-          No editable text on page {status.page + 1}. If it&apos;s a scanned page, its text is an image and can&apos;t be edited here. PDF to Text and Smart Extraction can read it with text recognition (OCR).
+          No editable text on page {status.page + 1}. If it&apos;s a scanned page, its text is an image and can&apos;t be edited here. PDF to Text and Invoice to Excel can read it with text recognition (OCR).
         </p>
       ) : (
         <p className="text-xs text-subtle">

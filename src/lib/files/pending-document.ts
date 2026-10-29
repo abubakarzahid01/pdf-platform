@@ -24,7 +24,7 @@ export function clearPendingDocument(doc: OpenDocument) {
   if (pending === doc) pending = null;
 }
 
-// Files chosen on a tool page, handed to a workspace page (e.g. Smart Extraction).
+// Files chosen on a tool page, handed to a workspace page (e.g. Invoice to Excel).
 let pendingFiles: File[] = [];
 
 export function setPendingFiles(files: File[]) {

@@ -105,7 +105,7 @@ export function ExtractionWorkspace() {
     }
   }
 
-  // Files chosen on the AI Data Extraction tool page arrive here. Processing starts on the
+  // Files chosen on the Invoice to Excel tool page arrive here. Processing starts on the
   // next tick and the hand-over is cleared only then, so React's development double-run
   // of effects can't drop the files.
   useEffect(() => {
@@ -158,8 +158,7 @@ export function ExtractionWorkspace() {
           <div className="flex items-center gap-3.5">
             <Logo />
             <span className="text-[#c5c3d3]" aria-hidden="true">/</span>
-            <strong className="text-[15px] font-semibold">Smart Extraction</strong>
-            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-bold text-brand-strong">PRO</span>
+            <strong className="text-[15px] font-semibold">Invoice to Excel</strong>
           </div>
           <ol aria-label="Progress" className="flex flex-wrap gap-2 text-[13px]">
             {steps.map((s, i) => (
@@ -261,8 +260,8 @@ export function ExtractionWorkspace() {
                 ))}
               </div>
               <p className="text-[13px] text-subtle">
-                Values are found from labels such as “Invoice number”, “Date”, “VAT” and “Total”. Describing other fields in your own words comes with
-                the AI assistant in Phase 7.
+                Values are found from labels such as “Invoice number”, “Date”, “VAT” and “Total”. Scanned invoices are read with text recognition
+                (OCR) in your browser.
               </p>
             </section>
           </aside>

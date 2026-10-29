@@ -14,8 +14,8 @@ const columns = [
   {
     title: "Product",
     links: [
-      { href: "/#pricing", label: "Pricing" },
-      { href: "/tools/ai-extraction", label: "AI Extract" },
+      { href: "/tools/invoice-to-excel", label: "Invoice to Excel" },
+      { href: "/tools/pdf-to-excel", label: "PDF to Excel" },
       { href: "#", label: "Help centre" },
     ],
   },

@@ -12,12 +12,11 @@ import {
   Images,
   LayoutGrid,
   Lock,
-  MessageSquareText,
   Minimize2,
   Presentation,
   RotateCw,
   Scissors,
-  Sparkles,
+  ReceiptText,
   Stamp,
   Table,
   type LucideIcon,
@@ -31,7 +30,7 @@ export type ToolCategory =
   | "organise"
   | "convert-to"
   | "convert-from"
-  | "ai"
+  | "extract"
   | "security";
 
 export type ToolTone = "brand" | "info" | "neutral";
@@ -44,7 +43,6 @@ export type Tool = {
   icon: LucideIcon;
   tone: ToolTone;
   popular?: boolean;
-  pro?: boolean;
 };
 
 export const categories: { id: ToolCategory; label: string }[] = [
@@ -52,7 +50,7 @@ export const categories: { id: ToolCategory; label: string }[] = [
   { id: "organise", label: "Organise" },
   { id: "convert-to", label: "Convert to PDF" },
   { id: "convert-from", label: "Convert from PDF" },
-  { id: "ai", label: "AI & Extract" },
+  { id: "extract", label: "Extract data" },
   { id: "security", label: "Security" },
 ];
 
@@ -84,9 +82,8 @@ export const tools: Tool[] = [
   { slug: "pdf-to-images", name: "PDF to images", description: "Save pages as PNG or JPG.", category: "convert-from", icon: FileImage, tone: "neutral" },
   { slug: "pdf-to-text", name: "PDF to text", description: "Extract the readable text.", category: "convert-from", icon: FileText, tone: "neutral" },
 
-  // AI & extraction
-  { slug: "ai-extraction", name: "AI Data Extraction", description: "Invoices and forms into one spreadsheet.", category: "ai", icon: Sparkles, tone: "brand", popular: true, pro: true },
-  { slug: "ai-assistant", name: "Chat with PDF", description: "Ask questions and get summaries.", category: "ai", icon: MessageSquareText, tone: "brand", pro: true },
+  // Extract data
+  { slug: "invoice-to-excel", name: "Invoice to Excel", description: "Supplier, invoice no., date and totals from many invoices into one spreadsheet.", category: "extract", icon: ReceiptText, tone: "brand", popular: true },
 
   // Security
   { slug: "protect-pdf", name: "Protect PDF", description: "Add a password to your document.", category: "security", icon: Lock, tone: "neutral" },
@@ -119,7 +116,7 @@ const inputSpecs: Record<string, Omit<InputSpec, "multiple">> = {
 
 const pdfInput: Omit<InputSpec, "multiple"> = { accept: ".pdf,application/pdf", label: "PDF", kinds: ["pdf"], expected: "a PDF" };
 
-const multiFileTools = new Set(["merge-pdf", "images-to-pdf", "ai-extraction"]);
+const multiFileTools = new Set(["merge-pdf", "images-to-pdf", "invoice-to-excel"]);
 
 export function getInputSpec(slug: string): InputSpec {
   return { ...(inputSpecs[slug] ?? pdfInput), multiple: multiFileTools.has(slug) };

@@ -10,7 +10,7 @@ export const site = {
 // Upload and processing limits. Enforced in code from Phase 3 onwards.
 export const limits = {
   free: {
-    maxFileSizeMb: 50, // [SIZE LIMIT] placeholder value until pricing is decided
+    maxFileSizeMb: 50, // [SIZE LIMIT] keeps processing in the browser responsive
     maxPages: 200,
     maxFilesPerTask: 10,
   },

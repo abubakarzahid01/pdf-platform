@@ -25,15 +25,14 @@ export async function generateMetadata({ params }: PageProps<"/tools/[slug]">): 
 
 // Tools with a full workspace screen link to its preview.
 const workspacePreviews: Record<string, { href: string; title: string; text: string; cta: string }> = {
-  "ai-extraction": { href: "/extract", title: "Smart Extraction workspace", text: "add invoices there directly, review and export.", cta: "Open workspace" },
+  "invoice-to-excel": { href: "/extract", title: "Invoice workspace", text: "add invoices there directly, review and export.", cta: "Open workspace" },
 };
 
 function actionLabel(tool: Tool) {
   if (tool.category === "convert-to") return "Convert to PDF";
   if (tool.category === "convert-from") return "Convert";
   if (tool.slug === "edit-pdf") return "Open in editor";
-  if (tool.slug === "ai-extraction") return "Extract data";
-  if (tool.slug === "ai-assistant") return "Start chat";
+  if (tool.slug === "invoice-to-excel") return "Extract data";
   if (tool.slug === "organise-pages") return "Save new PDF";
   return tool.name;
 }
@@ -87,9 +86,6 @@ async function ToolContent({ params }: { params: PageProps<"/tools/[slug]">["par
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-display text-[32px] font-extrabold tracking-[-0.03em] sm:text-[40px]">{tool.name}</h1>
-          {tool.pro && (
-            <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-bold text-brand-strong">PRO</span>
-          )}
         </div>
         <p className="max-w-[720px] text-[17px] text-muted">{tool.description}</p>
       </div>
@@ -120,7 +116,7 @@ async function ToolContent({ params }: { params: PageProps<"/tools/[slug]">["par
         <div className="flex flex-col gap-1.5">
           <strong className="text-[15px]">Limits</strong>
           <span className="text-sm text-muted">
-            Free: up to {limits.free.maxFileSizeMb} MB per file. Pro: larger files and batch processing.
+            Up to {limits.free.maxFileSizeMb} MB per file. Free to use.
           </span>
         </div>
         {related.length > 0 && (

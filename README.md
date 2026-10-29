@@ -2,10 +2,11 @@
 
 An all-in-one web platform to edit, convert, organise and extract data from PDF, Word, Excel and PowerPoint files.
 
-> Status: **Phases 1–5 complete.** Upload checks, viewing, merge/split/rotate/organise/compress,
-> and an editor with annotations, added text, images, shapes, links and existing-text editing.
-> Phase 6 (smart extraction): PDF to text, Excel and CSV, invoice extraction with review, and OCR for
-> scanned pages are done.
+> Status: working today: upload checks, the editor (edit existing text, add text, images, shapes,
+> links, highlights, drawing, comments), merge, split, rotate, organise, compress, PDF to text,
+> PDF to Excel/CSV and Invoice to Excel, with OCR for scanned pages. Everything runs in the browser.
+> Goal now: finish the core PDF tools, test them, host cheaply and launch. No AI features, paid APIs
+> or monetisation in the current scope.
 
 ## Running locally
 
@@ -21,15 +22,13 @@ npm run build    # production build (run before committing larger changes)
 
 ## Architecture
 
-The platform has three parts:
+1. **Website (browser)** — Next.js + React + TypeScript + Tailwind CSS. Every working tool
+   runs in the user's browser, so files never leave their computer and hosting stays cheap:
+   viewing, editing, merging, splitting, rotating, reordering, compressing, extraction and OCR.
+2. **Conversion server (only if needed)** — Office → PDF needs LibreOffice, which a browser
+   can't run. It would need a small server, which costs money, so it's held back until there is demand.
 
-1. **Website (browser)** — Next.js + React + TypeScript + Tailwind CSS.
-   Simple jobs run in the user's browser so files never leave their computer:
-   viewing, merging, splitting, rotating, reordering, watermarks, page numbers.
-2. **Conversion server (later phases)** — a separate service on a small VPS for work a
-   browser cannot do: Office → PDF (LibreOffice), OCR (Tesseract), compression and
-   password protection (qpdf). Kept separate because serverless hosting cannot run LibreOffice.
-3. **Accounts and storage (Phase 8)** — Supabase for authentication, usage limits and private file storage.
+No accounts or file storage: nothing is uploaded, so there is nothing to store.
 
 The PDF text-editing engine will sit behind its own interface so it can be replaced
 (for example by a commercial SDK) without rewriting the editor.
@@ -101,22 +100,31 @@ publishing our source code, unless a commercial licence is bought. Revisit only 
 rewrites text in the content stream — never a white box over the original. Consider a commercial
 SDK (Apryse, Nutrient, MuPDF commercial) once revenue justifies it.
 
-## Development phases
+## Done so far
 
 1. ✅ Workspace and project setup
-2. ✅ Premium UI (homepage, tool pages, editor layout)
-3. ✅ Working PDF foundation (upload checks, rendering, navigation, zoom, download, errors)
+2. ✅ UI (homepage, tool pages, editor layout)
+3. ✅ PDF foundation (upload checks, rendering, navigation, zoom, download, errors)
 4. ✅ Core PDF tools (merge, split, rotate, organise, compress, annotations)
 5. ✅ PDF editing (add text, images, shapes, links; edit existing text with removal + verification)
-6. **Smart extraction (text, tables, Excel/CSV, batch, OCR)** ← next
-7. AI workflows
-8. Accounts and monetisation
-9. Security and production readiness
-10. Deployment and launch
+6. ✅ Extraction (PDF to text, Excel/CSV, Invoice to Excel, OCR for scanned pages)
 
-Each phase is tested and confirmed before the next one starts.
+## Launch plan
+
+1. ✅ Remove AI and pricing items from the site (Stage 1)
+2. **Free browser tools: images to PDF, PDF to images, page numbers, watermark, crop, signature** ← next
+3. Protect PDF (open-source encryption in the browser, licence to be checked)
+4. Office conversions: hidden at launch unless a free option is found; PDF to Word only if quality is good enough
+5. Full testing and mobile layout
+6. Low-cost hosting (Cloudflare Pages free plan; domain is the only cost)
+7. Launch, watch real usage, improve from feedback
+
+Not in scope for now: AI features, paid APIs, accounts, subscriptions and ads. They may be
+reconsidered after launch if there is demand and a budget.
+
+Each stage is tested and confirmed before the next one starts.
 
 ## Open decisions
 
 - Brand name and domain (replace `[Brand]` in `src/config/site.ts`)
-- Pricing, free-tier limits and file-retention period
+- File size and page limits for the public site

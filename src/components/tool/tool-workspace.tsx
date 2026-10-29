@@ -123,7 +123,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
 
   // Tools whose action opens a full workspace page instead of producing a file here.
   const opensEditor = slug === "edit-pdf";
-  const opensExtraction = slug === "ai-extraction";
+  const opensExtraction = slug === "invoice-to-excel";
   const opensWorkspace = opensEditor || opensExtraction;
   const runnable = runnableTools.has(slug);
   const enoughFiles = valid.length >= minimumFiles(slug);
