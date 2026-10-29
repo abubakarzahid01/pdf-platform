@@ -76,6 +76,8 @@ Every significant library must be safe for commercial, closed-source use.
 | PDF rendering | PDF.js (`pdfjs-dist` 6) | Apache-2.0 | ✅ installed (Phase 3) |
 | PDF manipulation | pdf-lib | MIT | ✅ merge, split, rotate (Phase 4) |
 | ZIP downloads | fflate | MIT | ✅ installed |
+| Font embedding | @pdf-lib/fontkit | MIT | ✅ add text (Phase 5) |
+| Font for added text | Inter via @expo-google-fonts/inter | OFL-1.1 (font), MIT (package) | ✅ embedded in full; subsetting damaged glyphs |
 | Automated tests | Vitest | MIT | ✅ installed (dev only) |
 | Excel / CSV export | ExcelJS, PapaParse | MIT | Phase 6 |
 | Office → PDF | LibreOffice (headless, server) | MPL-2.0 | Conversion phase |

@@ -33,6 +33,13 @@ function appearance(context: PDFContext, bbox: readonly number[], content: strin
  */
 export async function annotatePdf(input: InputPdf, annotations: PdfAnnotation[]): Promise<OutputFile> {
   const doc = await PDFDocument.load(input.bytes);
+  addAnnotations(doc, annotations);
+  const bytes = await doc.save();
+  return { name: `${baseName(input.name)}-annotated.pdf`, bytes, pageCount: doc.getPageCount() };
+}
+
+// Adds the annotations to an open document (used by annotatePdf and applyEdits).
+export function addAnnotations(doc: PDFDocument, annotations: PdfAnnotation[]) {
   const pages = doc.getPages();
   const context = doc.context;
 
@@ -96,7 +103,4 @@ export async function annotatePdf(input: InputPdf, annotations: PdfAnnotation[])
     const dict = context.obj({ Type: "Annot", F: PRINT_FLAG, ...annot, P: page.ref } as never);
     page.node.addAnnot(context.register(dict));
   }
-
-  const bytes = await doc.save();
-  return { name: `${baseName(input.name)}-annotated.pdf`, bytes, pageCount: doc.getPageCount() };
 }

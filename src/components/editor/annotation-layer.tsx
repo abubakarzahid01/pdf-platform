@@ -1,7 +1,20 @@
 "use client";
 
 import { useRef, useState, type PointerEvent } from "react";
-import { COMMENT_SIZE, describe, type NewAnnotation, type ViewAnnotation } from "@/components/editor/annotations";
+import {
+  COMMENT_SIZE,
+  TEXT_ASCENT,
+  TEXT_LINE_HEIGHT,
+  cssFont,
+  describe,
+  fontFamilies,
+  measureText,
+  textLines,
+  translate,
+  type NewAnnotation,
+  type TextStyle,
+  type ViewAnnotation,
+} from "@/components/editor/annotations";
 import type { EditorTool } from "@/components/editor/editor-workspace";
 
 type Props = {
@@ -12,20 +25,31 @@ type Props = {
   tool: EditorTool;
   items: ViewAnnotation[];
   selectedId: string | null;
+  editingId: string | null;
   highlightColor: string;
   inkColor: string;
   inkWidth: number;
+  textStyle: TextStyle;
   onCreate: (a: NewAnnotation) => void;
   onSelect: (id: string | null) => void;
+  onMove: (id: string, dx: number, dy: number) => void;
+  onEdit: (id: string | null) => void;
+  onText: (id: string, text: string) => void;
 };
 
 type Draft = { type: "highlight"; start: [number, number]; end: [number, number] } | { type: "ink"; points: [number, number][] };
+type Move = { id: string; start: [number, number]; dx: number; dy: number };
 
 const MIN_HIGHLIGHT = 4;
+const MIN_MOVE = 1;
 
 function bounds(a: ViewAnnotation) {
   if (a.type === "highlight") return { x: a.x, y: a.y, w: a.w, h: a.h };
   if (a.type === "comment") return { x: a.x, y: a.y, w: COMMENT_SIZE, h: COMMENT_SIZE };
+  if (a.type === "text") {
+    const lines = textLines(a.text).length;
+    return { x: a.x, y: a.y, w: measureText(a.text || " ", a), h: a.size * TEXT_LINE_HEIGHT * lines };
+  }
   const xs = a.points.map((p) => p[0]);
   const ys = a.points.map((p) => p[1]);
   return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
@@ -33,17 +57,24 @@ function bounds(a: ViewAnnotation) {
 
 // Transparent drawing surface over one page. Works in 100% page units; the SVG scales with zoom.
 export function AnnotationLayer(props: Props) {
-  const { page, width, height, scale, tool, items, selectedId } = props;
+  const { page, width, height, scale, tool, items, selectedId, editingId } = props;
   const svgRef = useRef<SVGSVGElement>(null);
   const [draft, setDraftState] = useState<Draft | null>(null);
-  // The ref holds the in-progress stroke so fast pointer events never read a stale value;
-  // the state copy is only for drawing it on screen.
+  const [move, setMoveState] = useState<Move | null>(null);
+  // Refs hold in-progress strokes and moves so fast pointer events never read a stale
+  // value; the state copies are only for drawing them on screen.
   const draftRef = useRef<Draft | null>(null);
+  const moveRef = useRef<Move | null>(null);
   const setDraft = (d: Draft | null) => {
     draftRef.current = d;
     setDraftState(d);
   };
-  const drawing = tool === "highlight" || tool === "draw" || tool === "comment";
+  const setMove = (m: Move | null) => {
+    moveRef.current = m;
+    setMoveState(m);
+  };
+
+  const drawing = tool === "highlight" || tool === "draw" || tool === "comment" || tool === "add-text";
   const selecting = tool === "select";
 
   function point(e: PointerEvent): [number, number] {
@@ -53,8 +84,21 @@ export function AnnotationLayer(props: Props) {
     return [x, y];
   }
 
+  function capture(e: PointerEvent) {
+    try {
+      // Keep receiving moves if the pointer leaves the page mid-stroke.
+      svgRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture isn't available for this pointer; drawing still works within the page.
+    }
+  }
+
   function onPointerDown(e: PointerEvent<SVGSVGElement>) {
     if (e.button !== 0) return;
+    if (editingId) {
+      props.onEdit(null);
+      return;
+    }
     if (selecting) {
       props.onSelect(null);
       return;
@@ -65,16 +109,25 @@ export function AnnotationLayer(props: Props) {
       props.onCreate({ type: "comment", page, x: p[0], y: p[1], text: "" });
       return;
     }
-    try {
-      // Keep receiving moves if the pointer leaves the page mid-stroke.
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Capture isn't available for this pointer; drawing still works within the page.
+    if (tool === "add-text") {
+      // Stop the browser's default press handling, which would move focus away from
+      // the new text box straight after it opens (and so close it).
+      e.preventDefault();
+      // Place the click at the middle of the first line, which feels natural.
+      props.onCreate({ type: "text", page, x: p[0], y: Math.max(0, p[1] - props.textStyle.size * 0.6), text: "", ...props.textStyle });
+      return;
     }
+    capture(e);
     setDraft(tool === "highlight" ? { type: "highlight", start: p, end: p } : { type: "ink", points: [p] });
   }
 
   function onPointerMove(e: PointerEvent<SVGSVGElement>) {
+    const m = moveRef.current;
+    if (m) {
+      const p = point(e);
+      setMove({ ...m, dx: p[0] - m.start[0], dy: p[1] - m.start[1] });
+      return;
+    }
     const draft = draftRef.current;
     if (!draft) return;
     const p = point(e);
@@ -82,6 +135,12 @@ export function AnnotationLayer(props: Props) {
   }
 
   function onPointerUp() {
+    const m = moveRef.current;
+    if (m) {
+      if (Math.hypot(m.dx, m.dy) >= MIN_MOVE) props.onMove(m.id, m.dx, m.dy);
+      setMove(null);
+      return;
+    }
     const draft = draftRef.current;
     if (!draft) return;
     if (draft.type === "highlight") {
@@ -98,14 +157,19 @@ export function AnnotationLayer(props: Props) {
     setDraft(null);
   }
 
+  // With the Select tool, pressing on an item selects it and starts moving it.
   const itemPointer = (id: string) => (e: PointerEvent) => {
-    if (!selecting) return;
+    if (!selecting || e.button !== 0) return;
     e.stopPropagation();
     props.onSelect(id);
+    capture(e);
+    setMove({ id, start: point(e), dx: 0, dy: 0 });
   };
 
-  const selected = items.find((a) => a.id === selectedId);
-  const sel = selected ? bounds(selected) : null;
+  const shown = items.map((a) => (move && move.id === a.id ? translate(a, move.dx, move.dy) : a));
+  const selected = shown.find((a) => a.id === selectedId);
+  const sel = selected && selected.id !== editingId ? bounds(selected) : null;
+  const editing = shown.find((a) => a.id === editingId && a.type === "text") as Extract<ViewAnnotation, { type: "text" }> | undefined;
 
   return (
     <svg
@@ -116,19 +180,25 @@ export function AnnotationLayer(props: Props) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={() => setDraft(null)}
+      onPointerCancel={() => {
+        setDraft(null);
+        setMove(null);
+      }}
       className="absolute inset-0"
       style={{
-        cursor: tool === "comment" ? "copy" : drawing ? "crosshair" : "default",
+        cursor: tool === "comment" ? "copy" : tool === "add-text" ? "text" : drawing ? "crosshair" : "default",
         // Drawing tools take over touch input; otherwise touch scrolls the page.
-        touchAction: drawing && tool !== "comment" ? "none" : "auto",
-        pointerEvents: drawing || selecting ? "auto" : "none",
+        touchAction: tool === "highlight" || tool === "draw" || move ? "none" : "auto",
+        pointerEvents: drawing || selecting || editingId ? "auto" : "none",
       }}
       aria-label={`Annotations on page ${page + 1}`}
       role="group"
     >
-      {items.map((a) => {
-        const common = { onPointerDown: itemPointer(a.id), style: { cursor: selecting ? "pointer" : undefined } };
+      {shown.map((a) => {
+        const common = {
+          onPointerDown: itemPointer(a.id),
+          style: { cursor: selecting ? (move?.id === a.id ? "grabbing" : "move") : undefined },
+        };
         if (a.type === "highlight") {
           return <rect key={a.id} {...common} x={a.x} y={a.y} width={a.w} height={a.h} fill={a.color} fillOpacity={0.45} style={{ ...common.style, mixBlendMode: "multiply" }} />;
         }
@@ -139,6 +209,30 @@ export function AnnotationLayer(props: Props) {
               {/* Wider invisible line makes thin strokes easy to click. */}
               <polyline points={pts} fill="none" stroke="transparent" strokeWidth={Math.max(10, a.width + 6)} />
               <polyline points={pts} fill="none" stroke={a.color} strokeWidth={a.width} strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+          );
+        }
+        if (a.type === "text") {
+          if (a.id === editingId) return null;
+          const b = bounds(a);
+          return (
+            <g key={a.id} {...common} onDoubleClick={() => selecting && props.onEdit(a.id)}>
+              {/* Transparent box so the whole text area is easy to grab. */}
+              <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="transparent" />
+              <text
+                fill={a.color}
+                fontFamily={fontFamilies.find((f) => f.value === a.family)?.css}
+                fontSize={a.size}
+                fontWeight={a.bold ? 700 : 400}
+                fontStyle={a.italic ? "italic" : "normal"}
+                style={{ whiteSpace: "pre" }}
+              >
+                {textLines(a.text).map((line, i) => (
+                  <tspan key={i} x={a.x} y={a.y + a.size * (TEXT_ASCENT + i * TEXT_LINE_HEIGHT)}>
+                    {line || " "}
+                  </tspan>
+                ))}
+              </text>
             </g>
           );
         }
@@ -153,6 +247,40 @@ export function AnnotationLayer(props: Props) {
           </g>
         );
       })}
+
+      {editing && (
+        // A real text field placed on the page; it scales with the zoom like the page does.
+        <foreignObject x={editing.x - 2} y={editing.y - 2} width={Math.max(40, width - editing.x)} height={Math.max(editing.size * 2, height - editing.y)}>
+          <textarea
+            autoFocus
+            aria-label="Text box"
+            value={editing.text}
+            placeholder="Type here"
+            onPointerDown={(e) => e.stopPropagation()}
+            onChange={(e) => props.onText(editing.id, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") props.onEdit(null);
+            }}
+            onBlur={() => props.onEdit(null)}
+            rows={Math.max(1, textLines(editing.text).length)}
+            style={{
+              font: cssFont(editing),
+              lineHeight: TEXT_LINE_HEIGHT,
+              color: editing.color,
+              width: Math.max(editing.size * 4, measureText(editing.text || "Type here", editing) + editing.size),
+              padding: 2,
+              margin: 0,
+              border: `${1.5 / scale}px dashed #5a47e0`,
+              borderRadius: 2,
+              background: "rgba(255,255,255,0.6)",
+              outline: "none",
+              resize: "none",
+              overflow: "hidden",
+              whiteSpace: "pre",
+            }}
+          />
+        </foreignObject>
+      )}
 
       {draft?.type === "highlight" && (
         <rect

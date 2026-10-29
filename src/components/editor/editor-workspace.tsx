@@ -34,18 +34,22 @@ import { PageThumbnails } from "@/components/editor/page-thumbnails";
 import { OpenFileScreen } from "@/components/editor/open-file-screen";
 import { AnnotationLayer } from "@/components/editor/annotation-layer";
 import {
+  defaultTextStyle,
   highlightColors,
   inkColors,
   newId,
   toPdfAnnotation,
+  toPdfText,
+  translate,
   type NewAnnotation,
+  type TextStyle,
   type ViewAnnotation,
 } from "@/components/editor/annotations";
-import { annotatePdf } from "@/lib/pdf/operations/annotate";
+import { applyEdits } from "@/lib/pdf/operations/edits";
 import { downloadBytes } from "@/lib/files/download";
 
-// Tools that work now; the others are previews of Phase 5.
-const workingTools = new Set<EditorTool>(["select", "highlight", "draw", "comment"]);
+// Tools that work now; the others arrive later in Phase 5.
+const workingTools = new Set<EditorTool>(["select", "add-text", "highlight", "draw", "comment"]);
 
 type History = { past: ViewAnnotation[][]; present: ViewAnnotation[]; future: ViewAnnotation[][] };
 
@@ -117,8 +121,11 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const [highlightColor, setHighlightColor] = useState(highlightColors[0]);
   const [inkColor, setInkColor] = useState(inkColors[2]);
   const [inkWidth, setInkWidth] = useState(3);
+  const [textStyle, setTextStyle] = useState<TextStyle>(defaultTextStyle);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const annotations = history.present;
   const selected = annotations.find((a) => a.id === selectedId) ?? null;
@@ -144,11 +151,36 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   function addAnnotation(a: NewAnnotation) {
     const item = { ...a, id: newId() } as ViewAnnotation;
     commit([...annotations, item]);
-    // Comments need text, so select them for typing; switch to the select tool to avoid stray notes.
-    if (item.type === "comment") {
+    // Comments and text need typing: select them and switch to Select so the next click
+    // finishes typing instead of adding another item.
+    if (item.type === "comment" || item.type === "text") {
       setSelectedId(item.id);
       setTool("select");
     }
+    if (item.type === "text") setEditingId(item.id);
+  }
+
+  function moveAnnotation(id: string, dx: number, dy: number) {
+    commit(annotations.map((a) => (a.id === id ? translate(a, dx, dy) : a)));
+  }
+
+  // Leaving a text box: an empty one is removed (no undo step, as it never held anything).
+  function finishEditing(id: string | null) {
+    if (id === null && editingId) {
+      const item = annotations.find((a) => a.id === editingId);
+      if (item?.type === "text" && !item.text.trim()) {
+        setHistory((h) => ({ ...h, present: h.present.filter((a) => a.id !== item.id) }));
+        setSelectedId(null);
+      }
+    }
+    setEditingId(id);
+  }
+
+  function changeTextStyle(patch: Partial<TextStyle>) {
+    if (selected?.type === "text") {
+      commit(annotations.map((a) => (a.id === selected.id ? { ...a, ...patch } : a)));
+    }
+    setTextStyle((s) => ({ ...s, ...patch }));
   }
 
   const deleteAnnotation = useCallback(
@@ -159,9 +191,12 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     [annotations, commit],
   );
 
-  // Typing a comment edits it in place; it isn't recorded as a separate undo step per key.
-  function setCommentText(id: string, text: string) {
-    setHistory((h) => ({ ...h, present: h.present.map((a) => (a.id === id && a.type === "comment" ? { ...a, text } : a)) }));
+  // Typing edits text in place; it isn't recorded as a separate undo step per key.
+  function setItemText(id: string, text: string) {
+    setHistory((h) => ({
+      ...h,
+      present: h.present.map((a) => (a.id === id && (a.type === "comment" || a.type === "text") ? { ...a, text } : a)),
+    }));
   }
 
   // Keyboard shortcuts (ignored while typing in a field).
@@ -249,12 +284,26 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     }
     setSaving(true);
     setSaveError(null);
+    setSaveNotice(null);
     try {
-      const pdfAnnotations = annotations.map((a) => toPdfAnnotation(a, sizes[a.page].viewport!));
-      const result = await annotatePdf({ name: doc.file.name, bytes: new Uint8Array(await doc.file.arrayBuffer()) }, pdfAnnotations);
+      const viewport = (page: number) => sizes[page].viewport!;
+      const texts = annotations.flatMap((a) => (a.type === "text" ? [toPdfText(a, viewport(a.page))] : []));
+      const pdfAnnotations = annotations.flatMap((a) => (a.type !== "text" ? [toPdfAnnotation(a, viewport(a.page))] : []));
+      // The font files are only fetched when text is being saved.
+      const { browserFontLoader } = await import("@/lib/pdf/fonts-browser");
+      const result = await applyEdits(
+        { name: doc.file.name, bytes: new Uint8Array(await doc.file.arrayBuffer()) },
+        { texts, annotations: pdfAnnotations },
+        browserFontLoader,
+      );
       downloadBytes(result.bytes, result.name);
+      if (result.substitutions > 0) {
+        setSaveNotice(
+          `${result.substitutions} text box${result.substitutions > 1 ? "es use" : " uses"} characters the chosen font can't show, so Inter was used instead.`,
+        );
+      }
     } catch {
-      setSaveError("The annotated PDF couldn't be created. Your annotations are still here; please try again.");
+      setSaveError("The edited PDF couldn't be created. Your changes are still here; please try again.");
     } finally {
       setSaving(false);
     }
@@ -280,9 +329,10 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
               {doc.pageCount} page{doc.pageCount > 1 ? "s" : ""} · {formatSize(doc.file.size)} ·{" "}
               {annotations.length === 0
                 ? "No changes yet"
-                : `${annotations.length} annotation${annotations.length > 1 ? "s" : ""}, saved when you download`}
+                : `${annotations.length} change${annotations.length > 1 ? "s" : ""}, saved when you download`}
             </span>
             {saveError && <span role="alert" className="text-xs text-danger">{saveError}</span>}
+            {saveNotice && <span role="status" className="text-xs text-info-strong">{saveNotice}</span>}
             {!saveError && emptyComments > 0 && (
               <span className="text-xs text-warn">
                 {emptyComments} empty comment{emptyComments > 1 ? "s" : ""} won&apos;t be saved
@@ -331,7 +381,13 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                   key={t.id}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => setTool(t.id)}
+                  onClick={() => {
+                    // Picking a tool starts something new: finish typing and clear the selection,
+                    // so style changes apply to the next item, not the previously selected one.
+                    if (editingId) finishEditing(null);
+                    if (t.id !== "select") setSelectedId(null);
+                    setTool(t.id);
+                  }}
                   className={`flex min-w-14 flex-col items-center gap-[3px] rounded-[10px] px-2 py-1.5 text-[11px] font-medium ${
                     active ? "bg-brand-soft text-brand-strong" : "text-ink-soft hover:bg-surface-soft"
                   }`}
@@ -371,11 +427,16 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                   tool={tool}
                   items={byPage.get(i) ?? []}
                   selectedId={selectedId}
+                  editingId={editingId}
                   highlightColor={highlightColor}
                   inkColor={inkColor}
                   inkWidth={inkWidth}
+                  textStyle={textStyle}
                   onCreate={addAnnotation}
                   onSelect={setSelectedId}
+                  onMove={moveAnnotation}
+                  onEdit={finishEditing}
+                  onText={setItemText}
                 />
               )}
             />
@@ -444,8 +505,10 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             onHighlightColor={setHighlightColor}
             onInkColor={setInkColor}
             onInkWidth={setInkWidth}
-            onCommentText={setCommentText}
+            onCommentText={setItemText}
             onDelete={deleteAnnotation}
+            textStyle={textStyle}
+            onTextStyle={changeTextStyle}
           />
         </aside>
       </div>

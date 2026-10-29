@@ -6,6 +6,8 @@ import "./globals.css";
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
+  // Italic is needed so the editor shows italic Inter text as it will be saved.
+  style: ["normal", "italic"],
 });
 
 const jakarta = Plus_Jakarta_Sans({
