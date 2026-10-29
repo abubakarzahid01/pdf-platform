@@ -34,15 +34,20 @@ import { PageThumbnails } from "@/components/editor/page-thumbnails";
 import { OpenFileScreen } from "@/components/editor/open-file-screen";
 import { AnnotationLayer } from "@/components/editor/annotation-layer";
 import {
+  defaultShapeStyle,
   defaultTextStyle,
   highlightColors,
   inkColors,
   newId,
   toPdfAnnotation,
+  normaliseUrl,
   toPdfImage,
+  toPdfLink,
+  toPdfShape,
   toPdfText,
   translate,
   type NewAnnotation,
+  type ShapeStyle,
   type TextStyle,
   type ViewAnnotation,
 } from "@/components/editor/annotations";
@@ -50,8 +55,8 @@ import { applyEdits } from "@/lib/pdf/operations/edits";
 import { downloadBytes } from "@/lib/files/download";
 import { prepareImage } from "@/lib/files/prepare-image";
 
-// Tools that work now; the others arrive later in Phase 5.
-const workingTools = new Set<EditorTool>(["select", "add-text", "image", "highlight", "draw", "comment"]);
+// Tools that work now; editing existing text arrives in the next step of Phase 5.
+const workingTools = new Set<EditorTool>(["select", "add-text", "image", "shape", "link", "highlight", "draw", "comment"]);
 
 // New images start at most this share of the page's width and height.
 const IMAGE_MAX_SHARE = 0.4;
@@ -127,6 +132,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const [inkColor, setInkColor] = useState(inkColors[2]);
   const [inkWidth, setInkWidth] = useState(3);
   const [textStyle, setTextStyle] = useState<TextStyle>(defaultTextStyle);
+  const [shapeStyle, setShapeStyle] = useState<ShapeStyle>(defaultShapeStyle);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -169,7 +175,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     commit([...annotations, item]);
     // Comments and text need typing, and images usually need positioning: select them and
     // switch to Select so the next click works on them instead of adding another item.
-    if (item.type === "comment" || item.type === "text" || item.type === "image") {
+    if (item.type === "comment" || item.type === "text" || item.type === "image" || item.type === "link") {
       setSelectedId(item.id);
       setTool("select");
     }
@@ -235,6 +241,20 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
       }
     }
     setEditingId(id);
+  }
+
+  function changeShapeStyle(patch: Partial<ShapeStyle>) {
+    if (selected?.type === "shape") {
+      commit(annotations.map((a) => (a.id === selected.id ? { ...a, ...patch } : a)));
+    }
+    setShapeStyle((s) => ({ ...s, ...patch }));
+  }
+
+  // Typing an address edits the link in place (no undo step per key); switching mode or page is a step.
+  function changeLink(id: string, patch: { mode?: "url" | "page"; url?: string; targetPage?: number }) {
+    const apply = (list: ViewAnnotation[]) => list.map((a) => (a.id === id && a.type === "link" ? { ...a, ...patch } : a));
+    if (patch.url !== undefined && Object.keys(patch).length === 1) setHistory((h) => ({ ...h, present: apply(h.present) }));
+    else commit(apply(annotations));
   }
 
   function changeTextStyle(patch: Partial<TextStyle>) {
@@ -350,14 +370,20 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
       const viewport = (page: number) => sizes[page].viewport!;
       const texts = annotations.flatMap((a) => (a.type === "text" ? [toPdfText(a, viewport(a.page))] : []));
       const images = annotations.flatMap((a) => (a.type === "image" ? [toPdfImage(a, viewport(a.page))] : []));
-      const pdfAnnotations = annotations.flatMap((a) =>
-        a.type !== "text" && a.type !== "image" ? [toPdfAnnotation(a, viewport(a.page))] : [],
-      );
+      const shapes = annotations.flatMap((a) => (a.type === "shape" ? [toPdfShape(a, viewport(a.page))] : []));
+      const pdfAnnotations = annotations.flatMap((a) => {
+        if (a.type === "highlight" || a.type === "ink" || a.type === "comment") return [toPdfAnnotation(a, viewport(a.page))];
+        if (a.type === "link") {
+          const link = toPdfLink(a, viewport(a.page), doc.pageCount);
+          return link ? [link] : [];
+        }
+        return [];
+      });
       // The font files are only fetched when text is being saved.
       const { browserFontLoader } = await import("@/lib/pdf/fonts-browser");
       const result = await applyEdits(
         { name: doc.file.name, bytes: new Uint8Array(await doc.file.arrayBuffer()) },
-        { texts, images, annotations: pdfAnnotations },
+        { texts, images, shapes, annotations: pdfAnnotations },
         browserFontLoader,
       );
       downloadBytes(result.bytes, result.name);
@@ -379,6 +405,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   }
 
   const emptyComments = annotations.filter((a) => a.type === "comment" && !a.text.trim()).length;
+  const brokenLinks = annotations.filter((a) => a.type === "link" && a.mode === "url" && !normaliseUrl(a.url)).length;
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-ink">
@@ -397,9 +424,15 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             </span>
             {saveError && <span role="alert" className="text-xs text-danger">{saveError}</span>}
             {saveNotice && <span role="status" className="text-xs text-info-strong">{saveNotice}</span>}
-            {!saveError && emptyComments > 0 && (
+            {!saveError && (emptyComments > 0 || brokenLinks > 0) && (
               <span className="text-xs text-warn">
-                {emptyComments} empty comment{emptyComments > 1 ? "s" : ""} won&apos;t be saved
+                {[
+                  emptyComments > 0 && `${emptyComments} empty comment${emptyComments > 1 ? "s" : ""}`,
+                  brokenLinks > 0 && `${brokenLinks} link${brokenLinks > 1 ? "s" : ""} without a valid address`,
+                ]
+                  .filter(Boolean)
+                  .join(" and ")}{" "}
+                won&apos;t be saved
               </span>
             )}
           </div>
@@ -496,6 +529,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                   inkColor={inkColor}
                   inkWidth={inkWidth}
                   textStyle={textStyle}
+                  shapeStyle={shapeStyle}
                   onCreate={addAnnotation}
                   onSelect={setSelectedId}
                   onMove={moveAnnotation}
@@ -577,6 +611,10 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             onTextStyle={changeTextStyle}
             onChooseImage={() => requestImage(pageRef.current - 1)}
             imageError={imageError}
+            shapeStyle={shapeStyle}
+            onShapeStyle={changeShapeStyle}
+            onLinkChange={changeLink}
+            pageCount={doc.pageCount}
           />
           <input
             ref={imageInputRef}

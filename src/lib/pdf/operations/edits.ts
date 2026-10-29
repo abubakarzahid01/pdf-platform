@@ -1,5 +1,5 @@
 import fontkit from "@pdf-lib/fontkit";
-import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage } from "pdf-lib";
+import { degrees, LineCapStyle, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { addAnnotations, type PdfAnnotation, type Rgb } from "./annotate";
 import { baseName, OperationError, type InputPdf, type OutputFile } from "./types";
 
@@ -33,7 +33,49 @@ export type PdfImage = {
   rotate: number;
 };
 
-export type Edits = { texts: PdfText[]; annotations: PdfAnnotation[]; images?: PdfImage[] };
+// Shapes in PDF coordinates. Rectangles and ellipses use their bounding box
+// (bottom-left corner and size); lines and arrows use their two end points.
+export type PdfBoxShape = { page: number; kind: "rect" | "ellipse"; x: number; y: number; width: number; height: number; stroke: Rgb; lineWidth: number; fill: Rgb | null };
+export type PdfLineShape = { page: number; kind: "line" | "arrow"; x1: number; y1: number; x2: number; y2: number; stroke: Rgb; lineWidth: number };
+export type PdfShape = PdfBoxShape | PdfLineShape;
+
+function isLineShape(s: PdfShape): s is PdfLineShape {
+  return s.kind === "line" || s.kind === "arrow";
+}
+
+export type Edits = { texts: PdfText[]; annotations: PdfAnnotation[]; images?: PdfImage[]; shapes?: PdfShape[] };
+
+const FILL_OPACITY = 0.25;
+const ARROW_ANGLE = (28 * Math.PI) / 180;
+
+function drawShape(page: PDFPage, s: PdfShape) {
+  const stroke = rgb(...s.stroke);
+  if (isLineShape(s)) {
+    const line = { thickness: s.lineWidth, color: stroke, lineCap: LineCapStyle.Round };
+    page.drawLine({ start: { x: s.x1, y: s.y1 }, end: { x: s.x2, y: s.y2 }, ...line });
+    if (s.kind === "arrow") {
+      // Two short strokes at the end point form the arrowhead.
+      const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+      const head = Math.max(8, s.lineWidth * 4);
+      for (const side of [-1, 1]) {
+        const a = angle + Math.PI - side * ARROW_ANGLE;
+        page.drawLine({ start: { x: s.x2, y: s.y2 }, end: { x: s.x2 + head * Math.cos(a), y: s.y2 + head * Math.sin(a) }, ...line });
+      }
+    }
+    return;
+  }
+  const outline = {
+    borderColor: stroke,
+    borderWidth: s.lineWidth,
+    color: s.fill ? rgb(...s.fill) : undefined,
+    opacity: s.fill ? FILL_OPACITY : undefined,
+  };
+  if (s.kind === "rect") {
+    page.drawRectangle({ x: s.x, y: s.y, width: s.width, height: s.height, ...outline });
+  } else {
+    page.drawEllipse({ x: s.x + s.width / 2, y: s.y + s.height / 2, xScale: s.width / 2, yScale: s.height / 2, ...outline });
+  }
+}
 
 // Supplies Inter font files: the browser fetches them, tests read them from disk.
 export type FontLoader = (style: InterStyle) => Promise<Uint8Array>;
@@ -108,6 +150,13 @@ export async function applyEdits(
       imageCache.set(img.bytes, embedded);
     }
     page.drawImage(embedded, { x: img.x, y: img.y, width: img.width, height: img.height, rotate: degrees(img.rotate) });
+  }
+
+  // Shapes go above images and below text.
+  for (const s of edits.shapes ?? []) {
+    const page = pages[s.page];
+    if (!page) throw new OperationError("A shape refers to a page that doesn't exist.");
+    drawShape(page, s);
   }
 
   let substitutions = 0;

@@ -1,4 +1,4 @@
-import { PDFDocument, PDFHexString, type PDFContext } from "pdf-lib";
+import { PDFDocument, PDFHexString, PDFString, type PDFContext } from "pdf-lib";
 import { baseName, OperationError, type InputPdf, type OutputFile } from "./types";
 
 // Annotations in PDF coordinates (points, origin bottom-left). Colours are 0-1 RGB.
@@ -7,7 +7,18 @@ export type Rgb = [number, number, number];
 export type PdfAnnotation =
   | { type: "highlight"; page: number; rect: [number, number, number, number]; color: Rgb }
   | { type: "ink"; page: number; points: [number, number][]; color: Rgb; width: number }
-  | { type: "comment"; page: number; at: [number, number]; text: string };
+  | { type: "comment"; page: number; at: [number, number]; text: string }
+  // A clickable area: opens a web address or jumps to another page (zero-based).
+  | { type: "link"; page: number; rect: [number, number, number, number]; url?: string; targetPage?: number };
+
+// Only these link types are allowed; others (e.g. javascript:) could run code in viewers.
+export function isSafeUrl(url: string) {
+  try {
+    return ["http:", "https:", "mailto:"].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
 
 const PRINT_FLAG = 4;
 const NO_ZOOM_NO_ROTATE = 8 | 16;
@@ -48,7 +59,20 @@ export function addAnnotations(doc: PDFDocument, annotations: PdfAnnotation[]) {
     if (!page) throw new OperationError("An annotation refers to a page that doesn't exist.");
 
     let annot: Record<string, unknown>;
-    if (a.type === "highlight") {
+    if (a.type === "link") {
+      const [x1, y1, x2, y2] = normaliseRect(a.rect);
+      let action: Record<string, unknown>;
+      if (a.url !== undefined) {
+        if (!isSafeUrl(a.url)) throw new OperationError("Links can only point to web (http/https) or email (mailto) addresses.");
+        action = { A: { Type: "Action", S: "URI", URI: PDFString.of(a.url) } };
+      } else if (a.targetPage !== undefined && pages[a.targetPage]) {
+        action = { Dest: [pages[a.targetPage].ref, "Fit"] };
+      } else {
+        throw new OperationError("A link points to a page that doesn't exist.");
+      }
+      // No visible border: the link area is invisible, as in most PDFs.
+      annot = { Subtype: "Link", Rect: [x1, y1, x2, y2], Border: [0, 0, 0], ...action };
+    } else if (a.type === "highlight") {
       const [x1, y1, x2, y2] = normaliseRect(a.rect);
       const rect = [x1, y1, x2, y2];
       annot = {

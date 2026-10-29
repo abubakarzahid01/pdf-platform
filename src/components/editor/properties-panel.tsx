@@ -7,8 +7,11 @@ import {
   highlightColors,
   inkColors,
   inkWidths,
+  normaliseUrl,
+  shapeKinds,
   textColors,
   textSizes,
+  type ShapeStyle,
   type TextStyle,
   type ViewAnnotation,
 } from "@/components/editor/annotations";
@@ -31,13 +34,135 @@ type Props = {
   onTextStyle: (patch: Partial<TextStyle>) => void;
   onChooseImage: () => void;
   imageError: string | null;
+  shapeStyle: ShapeStyle;
+  onShapeStyle: (patch: Partial<ShapeStyle>) => void;
+  onLinkChange: (id: string, patch: { mode?: "url" | "page"; url?: string; targetPage?: number }) => void;
+  pageCount: number;
 };
 
 const comingLater: Partial<Record<EditorTool, string>> = {
   "edit-text": "Click existing text to change it. The original text is removed and rewritten, never covered with a white box.",
-  shape: "Draw rectangles, circles, lines and arrows.",
-  link: "Drag over an area to turn it into a clickable link.",
 };
+
+function ShapeControls({ style, onChange }: { style: ShapeStyle; onChange: (patch: Partial<ShapeStyle>) => void }) {
+  const closed = style.kind === "rect" || style.kind === "ellipse";
+  return (
+    <>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-xs font-semibold text-muted">Shape</legend>
+        <div className="grid grid-cols-2 gap-1 rounded-[11px] bg-[#f2f2f7] p-1">
+          {shapeKinds.map((k) => (
+            <button
+              key={k.value}
+              type="button"
+              aria-pressed={style.kind === k.value}
+              onClick={() => onChange({ kind: k.value })}
+              className={`min-h-9 rounded-lg text-[13px] ${style.kind === k.value ? "bg-surface font-semibold shadow-card" : "font-medium text-muted"}`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <Swatches label="Colour" colors={inkColors} value={style.color} onChange={(color) => onChange({ color })} />
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-xs font-semibold text-muted">Line width</legend>
+        <div className="flex gap-1 rounded-[11px] bg-[#f2f2f7] p-1">
+          {inkWidths.map((w) => (
+            <button
+              key={w.value}
+              type="button"
+              aria-pressed={style.lineWidth === w.value}
+              onClick={() => onChange({ lineWidth: w.value })}
+              className={`min-h-9 flex-1 rounded-lg text-[13px] ${style.lineWidth === w.value ? "bg-surface font-semibold shadow-card" : "font-medium text-muted"}`}
+            >
+              {w.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {closed && (
+        <label className="flex items-center gap-2.5 rounded-[10px] border border-line px-3 py-2.5 text-sm font-medium text-ink">
+          <input type="checkbox" checked={style.fill} onChange={(e) => onChange({ fill: e.target.checked })} className="size-4 accent-brand" />
+          Light fill in the same colour
+        </label>
+      )}
+    </>
+  );
+}
+
+function LinkControls({
+  link,
+  pageCount,
+  onChange,
+}: {
+  link: Extract<ViewAnnotation, { type: "link" }>;
+  pageCount: number;
+  onChange: (patch: { mode?: "url" | "page"; url?: string; targetPage?: number }) => void;
+}) {
+  const valid = link.mode === "page" ? link.targetPage < pageCount : normaliseUrl(link.url) !== null;
+  return (
+    <>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-xs font-semibold text-muted">Link goes to</legend>
+        <div className="flex gap-1 rounded-[11px] bg-[#f2f2f7] p-1">
+          {(
+            [
+              { value: "url", label: "Web or email" },
+              { value: "page", label: "A page here" },
+            ] as const
+          ).map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              aria-pressed={link.mode === m.value}
+              onClick={() => onChange({ mode: m.value })}
+              className={`min-h-9 flex-1 rounded-lg text-[13px] ${link.mode === m.value ? "bg-surface font-semibold shadow-card" : "font-medium text-muted"}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {link.mode === "url" ? (
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-muted">
+          Address
+          <input
+            autoFocus={!link.url}
+            value={link.url}
+            onChange={(e) => onChange({ url: e.target.value })}
+            placeholder="example.com or name@example.com"
+            className="rounded-[9px] border border-line px-2.5 py-2 text-sm font-normal text-ink"
+          />
+        </label>
+      ) : (
+        <label className="flex flex-col gap-1.5 text-xs font-semibold text-muted">
+          Page
+          <select
+            value={link.targetPage}
+            onChange={(e) => onChange({ targetPage: Number(e.target.value) })}
+            className="rounded-[9px] border border-line bg-surface px-2.5 py-2 text-sm font-normal text-ink"
+          >
+            {Array.from({ length: pageCount }, (_, i) => (
+              <option key={i} value={i}>
+                Page {i + 1}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {valid ? (
+        <span className="text-xs text-success">
+          {link.mode === "page" ? `Opens page ${link.targetPage + 1}.` : `Opens ${normaliseUrl(link.url)}`}
+        </span>
+      ) : (
+        <span className="text-xs text-warn">
+          {link.url.trim() ? "Use a web address (https://…) or an email address. Other link types aren't allowed." : "Add an address. Links without one aren't saved."}
+        </span>
+      )}
+    </>
+  );
+}
 
 function Swatches({ colors, value, onChange, label }: { colors: string[]; value: string; onChange: (c: string) => void; label: string }) {
   return (
@@ -140,6 +265,10 @@ export function PropertiesPanel(props: Props) {
           <strong className="text-sm">Selected: {describe(selected).toLowerCase()}</strong>
           <span className="text-xs text-subtle">Page {selected.page + 1}</span>
         </div>
+        {selected.type === "shape" && <ShapeControls style={selected} onChange={props.onShapeStyle} />}
+        {selected.type === "link" && (
+          <LinkControls link={selected} pageCount={props.pageCount} onChange={(patch) => props.onLinkChange(selected.id, patch)} />
+        )}
         {selected.type === "image" && (
           <div className="flex flex-col gap-1 text-xs text-subtle">
             <span className="truncate text-sm text-ink-soft">{selected.name}</span>
@@ -228,6 +357,24 @@ export function PropertiesPanel(props: Props) {
           <Shortcuts />
         </>
       );
+    case "shape":
+      return (
+        <>
+          <p className="text-sm text-muted">Drag on the page to draw. Shapes become part of the page and stay sharp at any zoom.</p>
+          <ShapeControls style={props.shapeStyle} onChange={props.onShapeStyle} />
+          <Shortcuts />
+        </>
+      );
+    case "link":
+      return (
+        <>
+          <p className="text-sm text-muted">
+            Drag over the area that should be clickable, for example a word or a button. Then choose where it goes.
+          </p>
+          <p className="text-xs text-subtle">The blue box only shows in the editor; in the saved PDF the area is invisible but clickable.</p>
+          <Shortcuts />
+        </>
+      );
     case "image":
       return (
         <>
@@ -262,7 +409,7 @@ export function PropertiesPanel(props: Props) {
           <p className="text-sm text-muted">{comingLater[tool]}</p>
           <div className="flex gap-2.5 rounded-xl bg-info-soft p-3.5 text-[13px] leading-normal text-info-strong">
             <Info className="mt-0.5 size-[18px] shrink-0" aria-hidden="true" />
-            <span>This tool arrives later in Phase 5. Add text, image, highlight, draw and comment work now.</span>
+            <span>Editing existing text arrives in the next step of Phase 5. All other tools work now.</span>
           </div>
         </>
       );

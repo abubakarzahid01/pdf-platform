@@ -1,7 +1,7 @@
 import type { PageViewport } from "pdfjs-dist";
-import type { PdfAnnotation, Rgb } from "@/lib/pdf/operations/annotate";
-import type { FontFamily, PdfImage, PdfText } from "@/lib/pdf/operations/edits";
-import { normalisedRotation, viewRectToPdfPlacement } from "@/lib/pdf/view-to-pdf";
+import { isSafeUrl, type PdfAnnotation, type Rgb } from "@/lib/pdf/operations/annotate";
+import type { FontFamily, PdfImage, PdfShape, PdfText } from "@/lib/pdf/operations/edits";
+import { normalisedRotation, viewPointToPdf, viewRectToPdfPlacement, viewRectToPdfRect } from "@/lib/pdf/view-to-pdf";
 
 // Items placed while editing, in "view" coordinates: the page as displayed at 100%
 // (rotation applied, origin top-left, 1 unit = 1 PDF point).
@@ -14,7 +14,44 @@ export type ViewAnnotation =
   | { id: string; page: number; type: "comment"; x: number; y: number; text: string }
   | ({ id: string; page: number; type: "text"; x: number; y: number; text: string } & TextStyle)
   // `src` is a temporary local URL for display; `bytes` is what gets embedded in the PDF.
-  | { id: string; page: number; type: "image"; x: number; y: number; w: number; h: number; src: string; bytes: Uint8Array; format: "png" | "jpeg"; name: string };
+  | { id: string; page: number; type: "image"; x: number; y: number; w: number; h: number; src: string; bytes: Uint8Array; format: "png" | "jpeg"; name: string }
+  // Shapes keep the two points they were dragged between; rectangles and ellipses fill that box.
+  | ({ id: string; page: number; type: "shape"; x1: number; y1: number; x2: number; y2: number } & ShapeStyle)
+  // A link either opens a web address or jumps to a page (zero-based).
+  | { id: string; page: number; type: "link"; x: number; y: number; w: number; h: number; mode: "url" | "page"; url: string; targetPage: number };
+
+export type ShapeKind = "rect" | "ellipse" | "line" | "arrow";
+export type ShapeStyle = { kind: ShapeKind; color: string; lineWidth: number; fill: boolean };
+
+export const shapeKinds: { value: ShapeKind; label: string }[] = [
+  { value: "rect", label: "Rectangle" },
+  { value: "ellipse", label: "Ellipse" },
+  { value: "line", label: "Line" },
+  { value: "arrow", label: "Arrow" },
+];
+export const defaultShapeStyle: ShapeStyle = { kind: "rect", color: "#e03131", lineWidth: 3, fill: false };
+export const SHAPE_FILL_OPACITY = 0.25;
+export const ARROW_HEAD_ANGLE = (28 * Math.PI) / 180;
+
+// Arrowhead stroke end points for an arrow from (x1,y1) to (x2,y2); same geometry as the saved PDF.
+export function arrowHead(x1: number, y1: number, x2: number, y2: number, lineWidth: number) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const head = Math.max(8, lineWidth * 4);
+  return [-1, 1].map((side) => {
+    const a = angle + Math.PI - side * ARROW_HEAD_ANGLE;
+    return [x2 + head * Math.cos(a), y2 + head * Math.sin(a)] as [number, number];
+  });
+}
+
+// Accepts what people type ("example.com", "name@example.com") and returns a safe link,
+// or null when it isn't a web or email address.
+export function normaliseUrl(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+  let url = value;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(value)) url = value.includes("@") && !value.includes("/") ? `mailto:${value}` : `https://${value}`;
+  return isSafeUrl(url) ? url : null;
+}
 
 export type NewAnnotation = ViewAnnotation extends infer A ? (A extends ViewAnnotation ? Omit<A, "id"> : never) : never;
 
@@ -76,8 +113,31 @@ export function toPdfImage(a: Extract<ViewAnnotation, { type: "image" }>, viewpo
   return { page: a.page, bytes: a.bytes, format: a.format, ...viewRectToPdfPlacement(a, viewport) };
 }
 
+export function shapeBox(a: Extract<ViewAnnotation, { type: "shape" }>) {
+  return { x: Math.min(a.x1, a.x2), y: Math.min(a.y1, a.y2), w: Math.abs(a.x2 - a.x1), h: Math.abs(a.y2 - a.y1) };
+}
+
+export function toPdfShape(a: Extract<ViewAnnotation, { type: "shape" }>, viewport: PageViewport): PdfShape {
+  const style = { page: a.page, stroke: hexToRgb(a.color), lineWidth: a.lineWidth };
+  if (a.kind === "line" || a.kind === "arrow") {
+    const [x1, y1] = viewPointToPdf(a.x1, a.y1, viewport);
+    const [x2, y2] = viewPointToPdf(a.x2, a.y2, viewport);
+    return { ...style, kind: a.kind, x1, y1, x2, y2 };
+  }
+  return { ...style, kind: a.kind, ...viewRectToPdfRect(shapeBox(a), viewport), fill: a.fill ? hexToRgb(a.color) : null };
+}
+
+// A link with no valid destination is left out (null); the editor warns about it.
+export function toPdfLink(a: Extract<ViewAnnotation, { type: "link" }>, viewport: PageViewport, pageCount: number): PdfAnnotation | null {
+  const box = viewRectToPdfRect(a, viewport);
+  const rect: [number, number, number, number] = [box.x, box.y, box.x + box.width, box.y + box.height];
+  if (a.mode === "page") return a.targetPage >= 0 && a.targetPage < pageCount ? { type: "link", page: a.page, rect, targetPage: a.targetPage } : null;
+  const url = normaliseUrl(a.url);
+  return url ? { type: "link", page: a.page, rect, url } : null;
+}
+
 // Converts an editor annotation to PDF coordinates, accounting for page rotation.
-export function toPdfAnnotation(a: Exclude<ViewAnnotation, { type: "text" | "image" }>, viewport: PageViewport): PdfAnnotation {
+export function toPdfAnnotation(a: Extract<ViewAnnotation, { type: "highlight" | "ink" | "comment" }>, viewport: PageViewport): PdfAnnotation {
   const pt = (x: number, y: number) => viewport.convertToPdfPoint(x, y) as [number, number];
   switch (a.type) {
     case "highlight": {
@@ -114,9 +174,11 @@ export function toPdfText(a: Extract<ViewAnnotation, { type: "text" }>, viewport
 // Moves any item by (dx, dy) in view units.
 export function translate(a: ViewAnnotation, dx: number, dy: number): ViewAnnotation {
   if (a.type === "ink") return { ...a, points: a.points.map(([x, y]) => [x + dx, y + dy] as [number, number]) };
+  if (a.type === "shape") return { ...a, x1: a.x1 + dx, y1: a.y1 + dy, x2: a.x2 + dx, y2: a.y2 + dy };
   return { ...a, x: a.x + dx, y: a.y + dy };
 }
 
 export function describe(a: ViewAnnotation) {
-  return { highlight: "Highlight", ink: "Drawing", comment: "Comment", text: "Text", image: "Image" }[a.type];
+  if (a.type === "shape") return shapeKinds.find((k) => k.value === a.kind)?.label ?? "Shape";
+  return { highlight: "Highlight", ink: "Drawing", comment: "Comment", text: "Text", image: "Image", link: "Link" }[a.type];
 }

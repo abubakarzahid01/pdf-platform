@@ -3,9 +3,13 @@
 import { useRef, useState, type PointerEvent } from "react";
 import {
   COMMENT_SIZE,
+  SHAPE_FILL_OPACITY,
   TEXT_ASCENT,
   TEXT_LINE_HEIGHT,
+  arrowHead,
   cssFont,
+  shapeBox,
+  type ShapeStyle,
   describe,
   fontFamilies,
   measureText,
@@ -30,6 +34,7 @@ type Props = {
   inkColor: string;
   inkWidth: number;
   textStyle: TextStyle;
+  shapeStyle: ShapeStyle;
   onCreate: (a: NewAnnotation) => void;
   onSelect: (id: string | null) => void;
   onMove: (id: string, dx: number, dy: number) => void;
@@ -39,7 +44,9 @@ type Props = {
   onResize: (id: string, w: number, h: number) => void;
 };
 
-type Draft = { type: "highlight"; start: [number, number]; end: [number, number] } | { type: "ink"; points: [number, number][] };
+type Draft =
+  | { type: "highlight" | "shape" | "link"; start: [number, number]; end: [number, number] }
+  | { type: "ink"; points: [number, number][] };
 type Move = { id: string; start: [number, number]; dx: number; dy: number };
 type Resize = { id: string; start: [number, number]; w: number; h: number; aspect: number; nextW: number };
 
@@ -49,7 +56,8 @@ const MIN_IMAGE = 16;
 const HANDLE = 10; // resize handle size in screen pixels
 
 function bounds(a: ViewAnnotation) {
-  if (a.type === "highlight" || a.type === "image") return { x: a.x, y: a.y, w: a.w, h: a.h };
+  if (a.type === "highlight" || a.type === "image" || a.type === "link") return { x: a.x, y: a.y, w: a.w, h: a.h };
+  if (a.type === "shape") return shapeBox(a);
   if (a.type === "comment") return { x: a.x, y: a.y, w: COMMENT_SIZE, h: COMMENT_SIZE };
   if (a.type === "text") {
     const lines = textLines(a.text).length;
@@ -58,6 +66,26 @@ function bounds(a: ViewAnnotation) {
   const xs = a.points.map((p) => p[0]);
   const ys = a.points.map((p) => p[1]);
   return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+}
+
+// Draws a shape the same way it will appear in the saved PDF.
+function ShapeView({ shape: s }: { shape: { x1: number; y1: number; x2: number; y2: number } & ShapeStyle }) {
+  const fill = s.fill ? s.color : "none";
+  const stroke = { stroke: s.color, strokeWidth: s.lineWidth, strokeLinecap: "round" as const };
+  const box = { x: Math.min(s.x1, s.x2), y: Math.min(s.y1, s.y2), w: Math.abs(s.x2 - s.x1), h: Math.abs(s.y2 - s.y1) };
+  if (s.kind === "rect") return <rect x={box.x} y={box.y} width={box.w} height={box.h} fill={fill} fillOpacity={SHAPE_FILL_OPACITY} {...stroke} />;
+  if (s.kind === "ellipse") {
+    return <ellipse cx={box.x + box.w / 2} cy={box.y + box.h / 2} rx={box.w / 2} ry={box.h / 2} fill={fill} fillOpacity={SHAPE_FILL_OPACITY} {...stroke} />;
+  }
+  return (
+    <>
+      {/* Wider invisible line makes thin lines easy to click. */}
+      <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="transparent" strokeWidth={Math.max(10, s.lineWidth + 6)} />
+      <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} {...stroke} />
+      {s.kind === "arrow" &&
+        arrowHead(s.x1, s.y1, s.x2, s.y2, s.lineWidth).map(([hx, hy], i) => <line key={i} x1={s.x2} y1={s.y2} x2={hx} y2={hy} {...stroke} />)}
+    </>
+  );
 }
 
 // Transparent drawing surface over one page. Works in 100% page units; the SVG scales with zoom.
@@ -85,7 +113,9 @@ export function AnnotationLayer(props: Props) {
     setResizeState(r);
   };
 
-  const drawing = tool === "highlight" || tool === "draw" || tool === "comment" || tool === "add-text" || tool === "image";
+  const drawing = ["highlight", "draw", "comment", "add-text", "image", "shape", "link"].includes(tool);
+  // Tools that drag out a stroke or box, and so take over touch input.
+  const dragging = tool === "highlight" || tool === "draw" || tool === "shape" || tool === "link";
   const selecting = tool === "select";
 
   function point(e: PointerEvent): [number, number] {
@@ -133,7 +163,8 @@ export function AnnotationLayer(props: Props) {
       return;
     }
     capture(e);
-    setDraft(tool === "highlight" ? { type: "highlight", start: p, end: p } : { type: "ink", points: [p] });
+    if (tool === "draw") setDraft({ type: "ink", points: [p] });
+    else setDraft({ type: tool === "shape" ? "shape" : tool === "link" ? "link" : "highlight", start: p, end: p });
   }
 
   function onPointerMove(e: PointerEvent<SVGSVGElement>) {
@@ -153,7 +184,7 @@ export function AnnotationLayer(props: Props) {
     const draft = draftRef.current;
     if (!draft) return;
     const p = point(e);
-    setDraft(draft.type === "highlight" ? { ...draft, end: p } : { ...draft, points: [...draft.points, p] });
+    setDraft(draft.type === "ink" ? { ...draft, points: [...draft.points, p] } : { ...draft, end: p });
   }
 
   function onPointerUp() {
@@ -171,13 +202,18 @@ export function AnnotationLayer(props: Props) {
     }
     const draft = draftRef.current;
     if (!draft) return;
-    if (draft.type === "highlight") {
+    if (draft.type !== "ink") {
       const [x1, y1] = draft.start;
       const [x2, y2] = draft.end;
       const w = Math.abs(x2 - x1);
       const h = Math.abs(y2 - y1);
-      if (w >= MIN_HIGHLIGHT && h >= MIN_HIGHLIGHT) {
-        props.onCreate({ type: "highlight", page, x: Math.min(x1, x2), y: Math.min(y1, y2), w, h, color: props.highlightColor });
+      const box = { x: Math.min(x1, x2), y: Math.min(y1, y2), w, h };
+      const lineLike = draft.type === "shape" && (props.shapeStyle.kind === "line" || props.shapeStyle.kind === "arrow");
+      const bigEnough = lineLike ? Math.hypot(w, h) >= MIN_HIGHLIGHT : w >= MIN_HIGHLIGHT && h >= MIN_HIGHLIGHT;
+      if (bigEnough) {
+        if (draft.type === "highlight") props.onCreate({ type: "highlight", page, ...box, color: props.highlightColor });
+        else if (draft.type === "shape") props.onCreate({ type: "shape", page, x1, y1, x2, y2, ...props.shapeStyle });
+        else props.onCreate({ type: "link", page, ...box, mode: "url", url: "", targetPage: page === 0 ? 1 : 0 });
       }
     } else if (draft.points.length > 1) {
       props.onCreate({ type: "ink", page, points: draft.points, color: props.inkColor, width: props.inkWidth });
@@ -228,7 +264,7 @@ export function AnnotationLayer(props: Props) {
       style={{
         cursor: tool === "comment" || tool === "image" ? "copy" : tool === "add-text" ? "text" : drawing ? "crosshair" : "default",
         // Drawing tools take over touch input; otherwise touch scrolls the page.
-        touchAction: tool === "highlight" || tool === "draw" || move || resize ? "none" : "auto",
+        touchAction: dragging || move || resize ? "none" : "auto",
         pointerEvents: drawing || selecting || editingId ? "auto" : "none",
       }}
       aria-label={`Annotations on page ${page + 1}`}
@@ -241,6 +277,24 @@ export function AnnotationLayer(props: Props) {
         };
         if (a.type === "highlight") {
           return <rect key={a.id} {...common} x={a.x} y={a.y} width={a.w} height={a.h} fill={a.color} fillOpacity={0.45} style={{ ...common.style, mixBlendMode: "multiply" }} />;
+        }
+        if (a.type === "shape") {
+          return (
+            <g key={a.id} {...common}>
+              <ShapeView shape={a} />
+            </g>
+          );
+        }
+        if (a.type === "link") {
+          const label = a.mode === "page" ? `→ Page ${a.targetPage + 1}` : a.url.trim() || "No address yet";
+          return (
+            <g key={a.id} {...common}>
+              <rect x={a.x} y={a.y} width={a.w} height={a.h} fill="#1971c2" fillOpacity={0.08} stroke="#1971c2" strokeWidth={1.2 / scale} strokeDasharray={`${4 / scale} ${2 / scale}`} />
+              <text x={a.x + 2} y={a.y - 3} fontSize={Math.max(7, 9 / scale)} fill="#1e3f86" fontFamily="var(--font-inter), sans-serif">
+                Link: {label.length > 40 ? `${label.slice(0, 40)}…` : label}
+              </text>
+            </g>
+          );
         }
         if (a.type === "image") {
           return (
@@ -337,6 +391,22 @@ export function AnnotationLayer(props: Props) {
         </foreignObject>
       )}
 
+      {draft?.type === "shape" && (
+        <ShapeView shape={{ x1: draft.start[0], y1: draft.start[1], x2: draft.end[0], y2: draft.end[1], ...props.shapeStyle }} />
+      )}
+      {draft?.type === "link" && (
+        <rect
+          x={Math.min(draft.start[0], draft.end[0])}
+          y={Math.min(draft.start[1], draft.end[1])}
+          width={Math.abs(draft.end[0] - draft.start[0])}
+          height={Math.abs(draft.end[1] - draft.start[1])}
+          fill="#1971c2"
+          fillOpacity={0.08}
+          stroke="#1971c2"
+          strokeWidth={1.2 / scale}
+          strokeDasharray={`${4 / scale} ${2 / scale}`}
+        />
+      )}
       {draft?.type === "highlight" && (
         <rect
           x={Math.min(draft.start[0], draft.end[0])}
