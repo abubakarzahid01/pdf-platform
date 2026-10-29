@@ -133,6 +133,12 @@ export function tokenizeContent(content: string): ContentOp[] {
       i++;
       return { kind: "name", value: readRegular() };
     }
+    // Numbers and keywords inside arrays, e.g. the spacing values in [(Q)-2(uart)] TJ.
+    if (!DELIMITERS.has(c)) {
+      const word = readRegular();
+      const value = Number(word);
+      return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(word) && Number.isFinite(value) ? { kind: "number", value } : { kind: "other", raw: word };
+    }
     return null;
   };
 

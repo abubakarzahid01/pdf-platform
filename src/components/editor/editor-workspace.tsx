@@ -215,7 +215,8 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
         map.set(
           page,
           lines.map((l) => {
-            const [x, baseline] = viewport.convertToViewportPoint(l.x, l.y) as [number, number];
+            // The box starts at the visible text, after any leading spaces.
+            const [x, baseline] = viewport.convertToViewportPoint(l.textX, l.y) as [number, number];
             return {
               id: l.id,
               text: l.text,

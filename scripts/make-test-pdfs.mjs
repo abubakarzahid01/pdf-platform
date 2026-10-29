@@ -99,4 +99,25 @@ images.forEach((image, i) => {
 });
 await writeFile(new URL("images-heavy.pdf", out), await heavy.save());
 
+// 7. Scanned page: only a picture of a page, no real text (as from a scanner).
+//    Grey "text lines" on white, so it looks like a document but has nothing to select.
+function scanLike(width, height) {
+  const data = new Uint8Array(width * height * 4).fill(250);
+  for (let line = 0; line < 18; line++) {
+    const top = 80 + line * 40;
+    const length = line % 5 === 4 ? 0.45 : 0.85;
+    for (let y = top; y < top + 12; y++) {
+      for (let x = 70; x < 70 + (width - 140) * length; x++) {
+        const i = (y * width + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = 90;
+      }
+    }
+  }
+  return data;
+}
+const scanned = await PDFDocument.create();
+const scanImage = await scanned.embedJpg(jpeg.encode({ data: scanLike(620, 877), width: 620, height: 877 }, 70).data);
+scanned.addPage(A4).drawImage(scanImage, { x: 0, y: 0, width: A4[0], height: A4[1] });
+await writeFile(new URL("scanned-page.pdf", out), await scanned.save());
+
 console.log("Test PDFs written to test-files/");

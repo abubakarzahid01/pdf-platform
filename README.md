@@ -2,7 +2,9 @@
 
 An all-in-one web platform to edit, convert, organise and extract data from PDF, Word, Excel and PowerPoint files.
 
-> Status: **Phase 1 — project foundation.** No PDF features are implemented yet.
+> Status: **Phases 1–5 complete.** Upload checks, viewing, merge/split/rotate/organise/compress,
+> and an editor with annotations, added text, images, shapes, links and existing-text editing.
+> Next: Phase 6 (smart extraction).
 
 ## Running locally
 
@@ -35,18 +37,21 @@ The PDF text-editing engine will sit behind its own interface so it can be repla
 
 ```
 src/
-  app/          Pages and layouts (Next.js App Router)
-    globals.css   Design tokens (colours, fonts, radii, shadows) as Tailwind theme
-    layout.tsx    Root layout: fonts and site metadata
-    page.tsx      Homepage (temporary Phase 1 placeholder)
+  app/          Pages: homepage, /tools/[slug], /editor, /extract (preview)
+  components/
+    editor/       Editor workspace, viewer, drawing layer, properties panel
+    tool/         Tool pages: workspace, options, results
   config/
     site.ts       Brand name, tagline and upload limits
     tools.ts      Tool catalogue and accepted file types per tool
   lib/
-    files/        File checks: real type from bytes, size, PDF password/damage/page limit
-    pdf/          PDF.js loading and helpers
-scripts/          make-test-pdfs.mjs generates test-files/
-test-files/       Test PDFs (normal, mixed sizes, locked, damaged, fake, too many pages)
+    files/        File checks (real type from bytes, limits), image preparation, downloads
+    pdf/
+      operations/ Merge, split, rotate, organise, compress, annotate, applyEdits (all tested)
+      text-edit/  Existing-text editing: content tokenizer, font decoding, line finder, apply + verify
+    tools/        Runs the right operation for each tool page
+scripts/          make-test-pdfs.mjs (test files), probe-text-edit.mts (text-editing report for any PDF)
+test-files/       Test PDFs incl. real-world-style Edge and Word exports (see test-files/README.md)
 ```
 
 ## Design tokens
@@ -84,6 +89,8 @@ Every significant library must be safe for commercial, closed-source use.
 | OCR | Tesseract | Apache-2.0 | Phase 6 |
 | Compression | pdf-lib + browser canvas (image recompression) | MIT | ✅ in the browser (Phase 4) |
 | Test images | jpeg-js | BSD-3-Clause | ✅ installed (dev only) |
+| Standard font metrics | @pdf-lib/standard-fonts | MIT | ✅ existing-text editing (Phase 5) |
+| Script runner | vite-node | MIT | ✅ installed (dev only) |
 | Passwords; large-file compression | qpdf (server) | Apache-2.0 | Later |
 
 **Avoided:** Ghostscript and MuPDF are AGPL — using them in a web service would require
@@ -95,12 +102,12 @@ SDK (Apryse, Nutrient, MuPDF commercial) once revenue justifies it.
 
 ## Development phases
 
-1. **Workspace and project setup** ← current
-2. Premium UI (homepage, tool pages, editor layout — prototypes clearly labelled)
-3. Working PDF foundation (upload, rendering, navigation, zoom, download, errors)
-4. Core PDF tools (merge, split, rotate, reorder, compress, annotations)
-5. PDF editing (text, images, supported existing-text editing)
-6. Smart extraction (text, tables, Excel/CSV, batch, OCR)
+1. ✅ Workspace and project setup
+2. ✅ Premium UI (homepage, tool pages, editor layout)
+3. ✅ Working PDF foundation (upload checks, rendering, navigation, zoom, download, errors)
+4. ✅ Core PDF tools (merge, split, rotate, organise, compress, annotations)
+5. ✅ PDF editing (add text, images, shapes, links; edit existing text with removal + verification)
+6. **Smart extraction (text, tables, Excel/CSV, batch, OCR)** ← next
 7. AI workflows
 8. Accounts and monetisation
 9. Security and production readiness

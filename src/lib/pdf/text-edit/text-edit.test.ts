@@ -121,6 +121,19 @@ describe("tokenizeContent", () => {
     expect(tj.kind === "string" && new TextDecoder().decode(tj.bytes)).toBe("Hello (world) A");
     expect(content.slice(ops[3].start, ops[3].end)).toBe("(Hello \\(world\\) \\101) Tj");
   });
+
+  it("reads numbers inside TJ arrays, as Microsoft Word writes them", () => {
+    const [tj] = tokenizeContent("[(Q)-2(uart)-3.5(er)] TJ");
+    expect(tj.op).toBe("TJ");
+    const arr = tj.operands[0];
+    expect(arr.kind === "array" && arr.items.map((i) => (i.kind === "number" ? i.value : i.kind === "string" ? new TextDecoder().decode(i.bytes) : "?"))).toEqual([
+      "Q",
+      -2,
+      "uart",
+      -3.5,
+      "er",
+    ]);
+  });
 });
 
 describe("parseToUnicode", () => {
@@ -131,7 +144,7 @@ describe("parseToUnicode", () => {
 });
 
 describe("readPageText", () => {
-  for (const file of ["sample-3-pages.pdf", "edge-invoice.pdf"]) {
+  for (const file of ["sample-3-pages.pdf", "edge-invoice.pdf", "word-letter.pdf"]) {
     it(`finds every line PDF.js sees, on the same baseline (${file})`, async () => {
       const bytes = bytesOf(file);
       const doc = await PDFDocument.load(bytes);
@@ -152,5 +165,27 @@ describe("readPageText", () => {
     expect(title.size).toBeCloseTo(21, 0); // 28 CSS px = 21 pt
     expect(lines.find((l) => l.text.includes("Café Street 12"))?.editable).toBe(true);
     expect(lines.find((l) => l.text === "£120.50")).toBeTruthy();
+  });
+
+  it("handles Word's PDFs: kerned lines, leading spaces and bullet symbols", async () => {
+    const doc = await PDFDocument.load(bytesOf("word-letter.pdf"));
+    const { lines } = readPageText(doc, 0);
+    expect(lines.find((l) => l.text === "Quarterly Update")?.editable).toBe(true);
+    // " this year. Our" follows the bold segment: the space is kept apart from the visible text.
+    const after = lines.find((l) => l.text === "this year. Our")!;
+    expect(after.leading).toBe(" ");
+    expect(after.textX).toBeGreaterThan(after.x);
+    // Bullets drawn with the Symbol font aren't offered for editing.
+    expect(lines.filter((l) => /[-]/.test(l.text)).every((l) => !l.editable)).toBe(true);
+  });
+
+  it("keeps the leading space when a line after a font change is edited", async () => {
+    const before = await pdfjsItems(bytesOf("word-letter.pdf"), 1);
+    const result = await editLines("word-letter.pdf", [{ match: "this year. Our", text: "this season. Our" }]);
+    const after = await pdfjsItems(result.bytes, 1);
+    const oldItem = before.find((i) => i.str.includes("this year. Our"))!;
+    const newItem = after.find((i) => i.str.includes("this season. Our"))!;
+    expect(newItem.x).toBeCloseTo(oldItem.x, 0);
+    expect(newItem.y).toBeCloseTo(oldItem.y, 0);
   });
 });

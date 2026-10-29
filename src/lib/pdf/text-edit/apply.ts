@@ -53,8 +53,11 @@ export function applyTextEdits(doc: PDFDocument, edits: TextLineEdit[]): TextEdi
         } else replacements.set(show.opIndex, spacer);
       }
 
-      const text = edit.text.replace(/\s+$/, "");
-      if (!text) continue; // the line was cleared: removal only
+      const typed = edit.text.replace(/\s+$/, "");
+      if (!typed) continue; // the line was cleared: removal only
+      // The user edits the visible text; any spaces the original drew first are kept,
+      // so the new text starts exactly where the old visible text did.
+      const text = line.leading + typed;
       const font = info.fonts.get(line.fontKey);
       const codes = font?.encode(text);
       if (codes) {
@@ -116,6 +119,11 @@ export async function verifyTextEdits(
     for (const e of edits.filter((x) => x.page === page)) {
       const oldText = squash(e.original);
       const newText = squash(e.text);
+      // Safety net: the line we think we're editing must really be on the page as a viewer
+      // reads it. If not, the editor misread the page, so refuse rather than guess.
+      if (oldText && count(was, oldText) === 0) {
+        return `The line “${e.original}” couldn't be matched to the text on page ${page + 1}, so it wasn't changed.`;
+      }
       if (newText && !now.includes(newText)) return `The new text “${e.text}” wasn't found on page ${page + 1} after saving.`;
       // When the new text contains the old (e.g. a word appended), the old count can't drop.
       if (!newText.includes(oldText) && count(now, oldText) >= count(was, oldText)) {

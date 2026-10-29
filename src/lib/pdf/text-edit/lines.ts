@@ -31,14 +31,19 @@ export type TextShow = {
   renderMatrix: Matrix;
   // Horizontal advance in thousandths of the font size, used to keep later text in place after removal.
   advance1000: number;
+  // Page-space width of any spaces before the first visible character.
+  leadWidth: number;
   upright: boolean;
 };
 
 export type TextLine = {
   id: number;
   page: number;
+  // Visible text (without leading spaces); `leading` holds the spaces drawn before it.
   text: string;
-  x: number;
+  leading: string;
+  x: number; // where drawing starts, including leading spaces
+  textX: number; // where the visible text starts
   y: number; // baseline, page coordinates
   width: number;
   size: number;
@@ -120,6 +125,7 @@ export function readPageText(doc: PDFDocument, pageIndex: number): PageText {
     const [x, y] = apply(renderMatrix, 0, 0);
     let tx = 0;
     let text = "";
+    let leadTx: number | null = null; // advance before the first visible character
     for (const part of parts) {
       if (typeof part === "number") {
         tx -= (part / 1000) * gs.size * gs.Th;
@@ -129,10 +135,12 @@ export function readPageText(doc: PDFDocument, pageIndex: number): PageText {
       }
       const codes = font ? codesOf(part, font.bytesPerCode) : Array.from(part);
       for (const code of codes) {
+        const char = font?.toText.get(code) ?? "�";
+        if (leadTx === null && char.trim()) leadTx = tx;
         const w0 = font ? font.widthOf(code) / 1000 : 0.5;
         const wordSpace = font?.bytesPerCode === 1 && code === 32 ? gs.Tw : 0;
         tx += (w0 * gs.size + gs.Tc + wordSpace) * gs.Th;
-        text += font?.toText.get(code) ?? "�";
+        text += char;
       }
     }
     const m = multiply(Tm, gs.ctm);
@@ -149,6 +157,7 @@ export function readPageText(doc: PDFDocument, pageIndex: number): PageText {
       color: gs.fill,
       renderMatrix,
       advance1000: gs.size && gs.Th ? (tx / (gs.size * gs.Th)) * 1000 : 0,
+      leadWidth: (leadTx ?? tx) * Math.abs(m[0]),
       upright,
     });
     Tm = multiply([1, 0, 0, 1, tx, 0], Tm);
@@ -251,15 +260,21 @@ function groupLines(shows: TextShow[], fonts: Map<string, FontInfo | null>, page
     const first = shows[current.shows[0]];
     const font = fonts.get(first.fontKey) ?? null;
     const baseFont = font?.baseFont ?? "";
-    const text = current.text.replace(/\s+$/, "");
-    if (text.trim()) {
+    const full = current.text.replace(/\s+$/, "");
+    const leading = full.match(/^\s*/)![0];
+    const text = full.slice(leading.length);
+    // Private-use characters (e.g. Word's bullet symbols) can't be edited meaningfully.
+    const symbolsOnly = /[-]/.test(text) || !/[\p{L}\p{N}\p{P}\p{S}]/u.test(text);
+    if (text) {
       lines.push({
         id: lines.length,
         page,
         text,
+        leading,
         x: first.x,
+        textX: first.x + (leading ? first.leadWidth : 0),
         y: first.y,
-        width: current.last.endX - first.x,
+        width: current.last.endX - (first.x + (leading ? first.leadWidth : 0)),
         size: first.size,
         color: first.color,
         fontKey: first.fontKey,
@@ -268,7 +283,7 @@ function groupLines(shows: TextShow[], fonts: Map<string, FontInfo | null>, page
         italic: /italic|oblique/i.test(baseFont),
         showIndices: current.shows,
         renderMatrix: first.renderMatrix,
-        editable: font !== null && current.shows.every((i) => shows[i].upright) && !text.includes("�"),
+        editable: font !== null && current.shows.every((i) => shows[i].upright) && !text.includes("�") && !symbolsOnly,
       });
     }
     current = null;
