@@ -22,6 +22,9 @@ type Verified = { state: "checking" } | { state: "ok"; pdf: PDFDocumentProxy } |
 export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
   const single = outputs.length === 1 ? outputs[0] : null;
   const totalSize = outputs.reduce((n, o) => n + o.bytes.length, 0);
+  // Outputs that aren't PDFs (text, spreadsheets) get their own preview and wording.
+  const isText = single?.mime?.startsWith("text/plain");
+  const kind = single?.mime ? (isText ? "text file" : "file") : "PDF";
 
   return (
     <div className="flex flex-col gap-5 rounded-panel border border-success/25 bg-success-soft/40 p-6">
@@ -30,7 +33,7 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
           <CheckCircle2 className="size-6 shrink-0 text-success" aria-hidden="true" />
           <div className="flex flex-col">
             <strong className="text-[17px]">
-              {single?.unchanged ? "No changes needed" : single ? "Your PDF is ready" : `${outputs.length} PDFs are ready`}
+              {single?.unchanged ? "No changes needed" : single ? `Your ${kind} is ready` : `${outputs.length} PDFs are ready`}
             </strong>
             <span className="text-sm text-muted">
               {single
@@ -41,19 +44,23 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
         </div>
         <button
           type="button"
-          onClick={() => (single ? downloadBytes(single.bytes, single.name) : downloadBytes(zipFiles(outputs), zipName, "application/zip"))}
+          onClick={() =>
+            single ? downloadBytes(single.bytes, single.name, single.mime) : downloadBytes(zipFiles(outputs), zipName, "application/zip")
+          }
           className="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-white hover:bg-brand-strong"
         >
           <Download className="size-4" aria-hidden="true" />
-          {single?.unchanged ? "Download original" : single ? "Download PDF" : "Download all (ZIP)"}
+          {single?.unchanged ? "Download original" : single ? `Download ${isText ? "TXT" : kind === "PDF" ? "PDF" : "file"}` : "Download all (ZIP)"}
         </button>
       </div>
 
       {single?.note && <p className="text-sm text-ink-soft">{single.note}</p>}
 
-      {single ? (
+      {single && isText ? (
+        <TextPreview output={single} />
+      ) : single && !single.mime ? (
         <ResultPreview output={single} />
-      ) : (
+      ) : single ? null : (
         <ul className="flex flex-col gap-2">
           {outputs.map((o) => (
             <li key={o.name} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-2.5">
@@ -82,6 +89,24 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
           Start over with new files
         </button>
       </div>
+    </div>
+  );
+}
+
+const TEXT_PREVIEW_CHARS = 4000;
+
+// The start of a text result, as it will appear in the downloaded file.
+function TextPreview({ output }: { output: OutputFile }) {
+  const text = new TextDecoder().decode(output.bytes);
+  const shown = text.slice(0, TEXT_PREVIEW_CHARS);
+  return (
+    <div className="flex flex-col gap-2">
+      <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-surface p-4 font-mono text-[13px] leading-relaxed text-ink">
+        {shown || "(no text)"}
+      </pre>
+      {text.length > shown.length && (
+        <p className="text-[13px] text-subtle">Showing the first {TEXT_PREVIEW_CHARS.toLocaleString("en-GB")} characters. The download has everything.</p>
+      )}
     </div>
   );
 }

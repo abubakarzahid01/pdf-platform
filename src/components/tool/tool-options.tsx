@@ -18,6 +18,7 @@ export const optionDefaults: Record<string, OptionValues> = {
   "pdf-to-excel": { tables: "One sheet per table" },
   "pdf-to-csv": { tables: "One sheet per table" },
   "crop-pdf": { mode: "Remove white margins" },
+  "pdf-to-text": { breaks: "marked" },
 };
 
 type Props = {
@@ -183,6 +184,23 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
       return (
         <Field label="Crop mode">
           <Segmented options={["Remove white margins", "Select area"]} value={text("mode")} onChange={set("mode")} />
+        </Field>
+      );
+    case "pdf-to-text":
+      return (
+        <Field label="Pages">
+          <Segmented
+            options={[
+              { value: "marked", label: "Mark each page" },
+              { value: "continuous", label: "One continuous text" },
+            ]}
+            value={text("breaks")}
+            onChange={set("breaks")}
+          />
+          <p className="text-[13px] text-subtle">
+            Text is put in reading order, line by line. Table columns are kept apart with extra spaces. Scanned pages have no
+            text yet; text recognition (OCR) comes next.
+          </p>
         </Field>
       );
     case "organise-pages":
