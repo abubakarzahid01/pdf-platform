@@ -15,6 +15,9 @@ export function parseCell(text: string): SheetCell {
   if (plain.test(t) && !/^0\d/.test(t)) return Number(t.replace(/,/g, ""));
   const money = /^(-)?([£$€])\s?((\d{1,3}(,\d{3})+|\d+)(\.\d+)?)$/.exec(t);
   if (money) return { value: Number(`${money[1] ?? ""}${money[3].replace(/,/g, "")}`), currency: money[2] as "£" | "$" | "€" };
+  // Amounts followed by a currency code, e.g. "1,679.33 EUR".
+  const coded = /^(-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?)\s?(GBP|USD|EUR)$/.exec(t);
+  if (coded) return { value: Number(coded[1].replace(/,/g, "")), currency: ({ GBP: "£", USD: "$", EUR: "€" } as const)[coded[5] as "GBP" | "USD" | "EUR"] };
   return t;
 }
 

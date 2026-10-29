@@ -59,6 +59,7 @@ describe("spreadsheet helpers", () => {
     expect(parseCell("1,240.00")).toBe(1240);
     expect(parseCell("-86.40")).toBe(-86.4);
     expect(parseCell("£45.00")).toEqual({ value: 45, currency: "£" });
+    expect(parseCell("1,679.33 EUR")).toEqual({ value: 1679.33, currency: "€" });
     expect(parseCell("4,50")).toBe("4,50"); // could be a European decimal: keep as text
     expect(parseCell("2026-10-01")).toBe("2026-10-01");
     expect(parseCell("007")).toBe("007"); // leading zeros matter (codes, IDs)

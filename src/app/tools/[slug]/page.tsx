@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: PageProps<"/tools/[slug]">): 
 
 // Tools with a full workspace screen link to its preview.
 const workspacePreviews: Record<string, { href: string; title: string; text: string; cta: string }> = {
-  "ai-extraction": { href: "/extract", title: "Preview the review screen", text: "see extracted invoice data with sample files.", cta: "Open preview" },
+  "ai-extraction": { href: "/extract", title: "Smart Extraction workspace", text: "add invoices there directly, review and export.", cta: "Open workspace" },
 };
 
 function actionLabel(tool: Tool) {

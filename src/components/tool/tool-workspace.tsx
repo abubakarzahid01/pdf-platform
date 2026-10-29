@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { limits } from "@/config/site";
 import type { InputSpec } from "@/config/tools";
 import { checkFile } from "@/lib/files/check-file";
-import { setPendingDocument } from "@/lib/files/pending-document";
+import { setPendingDocument, setPendingFiles } from "@/lib/files/pending-document";
 import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { OperationError, baseName, type OutputFile } from "@/lib/pdf/operations/types";
 import { minimumFiles, runTool, runnableTools } from "@/lib/tools/run-tool";
@@ -121,10 +121,13 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   const valid = items.filter((i) => i.status.state === "ok");
   const firstValid = valid[0];
 
+  // Tools whose action opens a full workspace page instead of producing a file here.
   const opensEditor = slug === "edit-pdf";
+  const opensExtraction = slug === "ai-extraction";
+  const opensWorkspace = opensEditor || opensExtraction;
   const runnable = runnableTools.has(slug);
   const enoughFiles = valid.length >= minimumFiles(slug);
-  const canAct = (opensEditor || runnable) && enoughFiles && !checking && errors === 0 && !running;
+  const canAct = (opensWorkspace || runnable) && enoughFiles && !checking && errors === 0 && !running;
 
   const organising = slug === "organise-pages" && !!firstValid?.pdf && !!firstValid.pageCount;
   const plan =
@@ -136,6 +139,11 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
     itemsRef.current = itemsRef.current.filter((i) => i.id !== firstValid.id);
     setPendingDocument({ file: firstValid.file, pdf: firstValid.pdf, pageCount: firstValid.pageCount });
     router.push("/editor");
+  }
+
+  function openInExtraction() {
+    setPendingFiles(valid.map((i) => i.file));
+    router.push("/extract");
   }
 
   async function run() {
@@ -156,9 +164,9 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   let note = "Add a file to get started.";
   if (checking) note = "Checking your files…";
   else if (errors > 0) note = `Remove the ${errors === 1 ? "file" : `${errors} files`} with problems to continue.`;
-  else if (hasFiles && (opensEditor || runnable) && !enoughFiles) note = `Add at least ${minimumFiles(slug)} PDFs.`;
+  else if (hasFiles && (opensWorkspace || runnable) && !enoughFiles) note = `Add at least ${minimumFiles(slug)} PDFs.`;
   else if (canAct) note = "Your files stay in your browser. Nothing is uploaded.";
-  else if (hasFiles && !runnable && !opensEditor) note = "Files checked. Processing for this tool arrives in a later phase.";
+  else if (hasFiles && !runnable && !opensWorkspace) note = "Files checked. Processing for this tool arrives in a later phase.";
 
   return (
     <div className="flex flex-wrap items-start gap-6">
@@ -225,7 +233,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
       <aside className="flex w-full max-w-[400px] flex-[1_1_340px] flex-col gap-5 rounded-panel border border-line bg-surface p-6 shadow-[0_12px_32px_rgb(21_19_43/0.06)]">
         <div className="flex items-center justify-between">
           <strong className="font-display text-[17px]">Options</strong>
-          {!opensEditor && !runnable && <PrototypeBadge />}
+          {!opensWorkspace && !runnable && <PrototypeBadge />}
         </div>
         <ToolOptions
           slug={slug}
@@ -239,7 +247,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
         <button
           type="button"
           disabled={!canAct}
-          onClick={opensEditor ? openInEditor : run}
+          onClick={opensEditor ? openInEditor : opensExtraction ? openInExtraction : run}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand py-[15px] text-base font-semibold text-white hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
         >
           {running && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}

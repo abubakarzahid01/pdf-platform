@@ -8,6 +8,9 @@ Generated files for checking uploads, validation and rendering. Not real documen
 | `mixed-sizes.pdf` | A4 portrait, A4 landscape, rotated Letter page | Each page shows at its own size and rotation |
 | `long-150-pages.pdf` | Long document within the limit | Opens; pages render as you scroll |
 | `edge-invoice.pdf` | Real-world-style PDF from Microsoft Edge (`edge-invoice.html`): subset CID fonts, text stored as glyph codes | Every line found and editable; edits keep the original font when it has the letters |
+| `invoice-bluefield.pdf` | Edge invoice: "Label: value" lines, ambiguous date 11/09/2026, totals in table rows, a VAT Reg No | All fields found; date and supplier marked unsure; VAT number ignored |
+| `invoice-orchard.pdf` | Edge invoice: "From:" supplier, date in words, amounts with EUR, no invoice number | Invoice no. reported missing; totals balance |
+| `invoice-kestrel.pdf` | Edge invoice: "Invoice #", ISO date, $ amounts, totals that don't add up | Mismatch flagged |
 | `word-letter.pdf` | Exported by Microsoft Word: embedded subset Calibri, kerned TJ arrays, bold/italic runs, Symbol bullets, a table | 18 of 20 lines editable (bullets excluded); edits keep position |
 | `scanned-page.pdf` | Only an image of a page, no real text | No editable text; editor explains OCR comes later |
 | `images-heavy.pdf` | Two large photo-like images (JPEG and lossless) plus text | Compresses to a much smaller file; text unchanged |
