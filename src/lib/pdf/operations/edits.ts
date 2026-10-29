@@ -1,5 +1,5 @@
 import fontkit from "@pdf-lib/fontkit";
-import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont } from "pdf-lib";
+import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage } from "pdf-lib";
 import { addAnnotations, type PdfAnnotation, type Rgb } from "./annotate";
 import { baseName, OperationError, type InputPdf, type OutputFile } from "./types";
 
@@ -20,7 +20,20 @@ export type PdfText = {
   rotate: number;
 };
 
-export type Edits = { texts: PdfText[]; annotations: PdfAnnotation[] };
+// A placed image. (x, y) is the corner that appears bottom-left on screen, converted to
+// PDF coordinates; `rotate` turns the image to read upright on rotated pages.
+export type PdfImage = {
+  page: number;
+  bytes: Uint8Array;
+  format: "png" | "jpeg";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotate: number;
+};
+
+export type Edits = { texts: PdfText[]; annotations: PdfAnnotation[]; images?: PdfImage[] };
 
 // Supplies Inter font files: the browser fetches them, tests read them from disk.
 export type FontLoader = (style: InterStyle) => Promise<Uint8Array>;
@@ -73,6 +86,29 @@ export async function applyEdits(
     if (!interCache.has(style)) interCache.set(style, await doc.embedFont(await loadFont(style), { subset: false }));
     return interCache.get(style)!;
   };
+
+  // Images first, so text added in the same edit sits on top of them.
+  // The same image placed several times is embedded once.
+  const imageCache = new Map<Uint8Array, PDFImage>();
+  for (const img of edits.images ?? []) {
+    const page = pages[img.page];
+    if (!page) throw new OperationError("An image refers to a page that doesn't exist.");
+    if (img.width <= 0 || img.height <= 0) continue;
+    let embedded = imageCache.get(img.bytes);
+    if (!embedded) {
+      // pdf-lib's image readers assume the data starts at the beginning of its buffer,
+      // so copy views into larger buffers (e.g. Node Buffers) into their own. A true copy
+      // is needed: Buffer.slice() would return another view of the same memory.
+      const data = img.bytes.byteOffset === 0 && img.bytes.byteLength === img.bytes.buffer.byteLength ? img.bytes : new Uint8Array(img.bytes);
+      try {
+        embedded = img.format === "png" ? await doc.embedPng(data) : await doc.embedJpg(data);
+      } catch {
+        throw new OperationError("One of the images couldn't be read. Try saving it again as PNG or JPG.");
+      }
+      imageCache.set(img.bytes, embedded);
+    }
+    page.drawImage(embedded, { x: img.x, y: img.y, width: img.width, height: img.height, rotate: degrees(img.rotate) });
+  }
 
   let substitutions = 0;
   for (const t of edits.texts) {

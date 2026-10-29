@@ -1,6 +1,7 @@
 import type { PageViewport } from "pdfjs-dist";
 import type { PdfAnnotation, Rgb } from "@/lib/pdf/operations/annotate";
-import type { FontFamily, PdfText } from "@/lib/pdf/operations/edits";
+import type { FontFamily, PdfImage, PdfText } from "@/lib/pdf/operations/edits";
+import { normalisedRotation, viewRectToPdfPlacement } from "@/lib/pdf/view-to-pdf";
 
 // Items placed while editing, in "view" coordinates: the page as displayed at 100%
 // (rotation applied, origin top-left, 1 unit = 1 PDF point).
@@ -11,7 +12,9 @@ export type ViewAnnotation =
   | { id: string; page: number; type: "highlight"; x: number; y: number; w: number; h: number; color: string }
   | { id: string; page: number; type: "ink"; points: [number, number][]; color: string; width: number }
   | { id: string; page: number; type: "comment"; x: number; y: number; text: string }
-  | ({ id: string; page: number; type: "text"; x: number; y: number; text: string } & TextStyle);
+  | ({ id: string; page: number; type: "text"; x: number; y: number; text: string } & TextStyle)
+  // `src` is a temporary local URL for display; `bytes` is what gets embedded in the PDF.
+  | { id: string; page: number; type: "image"; x: number; y: number; w: number; h: number; src: string; bytes: Uint8Array; format: "png" | "jpeg"; name: string };
 
 export type NewAnnotation = ViewAnnotation extends infer A ? (A extends ViewAnnotation ? Omit<A, "id"> : never) : never;
 
@@ -68,8 +71,13 @@ function hexToRgb(hex: string): Rgb {
   return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
 }
 
+// Converts a placed image, keeping it upright and in place on rotated pages.
+export function toPdfImage(a: Extract<ViewAnnotation, { type: "image" }>, viewport: PageViewport): PdfImage {
+  return { page: a.page, bytes: a.bytes, format: a.format, ...viewRectToPdfPlacement(a, viewport) };
+}
+
 // Converts an editor annotation to PDF coordinates, accounting for page rotation.
-export function toPdfAnnotation(a: Exclude<ViewAnnotation, { type: "text" }>, viewport: PageViewport): PdfAnnotation {
+export function toPdfAnnotation(a: Exclude<ViewAnnotation, { type: "text" | "image" }>, viewport: PageViewport): PdfAnnotation {
   const pt = (x: number, y: number) => viewport.convertToPdfPoint(x, y) as [number, number];
   switch (a.type) {
     case "highlight": {
@@ -99,7 +107,7 @@ export function toPdfText(a: Extract<ViewAnnotation, { type: "text" }>, viewport
     italic: a.italic,
     size: a.size,
     color: hexToRgb(a.color),
-    rotate: ((viewport.rotation % 360) + 360) % 360,
+    rotate: normalisedRotation(viewport),
   };
 }
 
@@ -110,5 +118,5 @@ export function translate(a: ViewAnnotation, dx: number, dy: number): ViewAnnota
 }
 
 export function describe(a: ViewAnnotation) {
-  return { highlight: "Highlight", ink: "Drawing", comment: "Comment", text: "Text" }[a.type];
+  return { highlight: "Highlight", ink: "Drawing", comment: "Comment", text: "Text", image: "Image" }[a.type];
 }

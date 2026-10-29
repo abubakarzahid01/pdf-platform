@@ -35,16 +35,21 @@ type Props = {
   onMove: (id: string, dx: number, dy: number) => void;
   onEdit: (id: string | null) => void;
   onText: (id: string, text: string) => void;
+  onRequestImage: (page: number, x: number, y: number) => void;
+  onResize: (id: string, w: number, h: number) => void;
 };
 
 type Draft = { type: "highlight"; start: [number, number]; end: [number, number] } | { type: "ink"; points: [number, number][] };
 type Move = { id: string; start: [number, number]; dx: number; dy: number };
+type Resize = { id: string; start: [number, number]; w: number; h: number; aspect: number; nextW: number };
 
 const MIN_HIGHLIGHT = 4;
 const MIN_MOVE = 1;
+const MIN_IMAGE = 16;
+const HANDLE = 10; // resize handle size in screen pixels
 
 function bounds(a: ViewAnnotation) {
-  if (a.type === "highlight") return { x: a.x, y: a.y, w: a.w, h: a.h };
+  if (a.type === "highlight" || a.type === "image") return { x: a.x, y: a.y, w: a.w, h: a.h };
   if (a.type === "comment") return { x: a.x, y: a.y, w: COMMENT_SIZE, h: COMMENT_SIZE };
   if (a.type === "text") {
     const lines = textLines(a.text).length;
@@ -73,8 +78,14 @@ export function AnnotationLayer(props: Props) {
     moveRef.current = m;
     setMoveState(m);
   };
+  const [resize, setResizeState] = useState<Resize | null>(null);
+  const resizeRef = useRef<Resize | null>(null);
+  const setResize = (r: Resize | null) => {
+    resizeRef.current = r;
+    setResizeState(r);
+  };
 
-  const drawing = tool === "highlight" || tool === "draw" || tool === "comment" || tool === "add-text";
+  const drawing = tool === "highlight" || tool === "draw" || tool === "comment" || tool === "add-text" || tool === "image";
   const selecting = tool === "select";
 
   function point(e: PointerEvent): [number, number] {
@@ -109,6 +120,10 @@ export function AnnotationLayer(props: Props) {
       props.onCreate({ type: "comment", page, x: p[0], y: p[1], text: "" });
       return;
     }
+    if (tool === "image") {
+      props.onRequestImage(page, p[0], p[1]);
+      return;
+    }
     if (tool === "add-text") {
       // Stop the browser's default press handling, which would move focus away from
       // the new text box straight after it opens (and so close it).
@@ -122,6 +137,13 @@ export function AnnotationLayer(props: Props) {
   }
 
   function onPointerMove(e: PointerEvent<SVGSVGElement>) {
+    const r = resizeRef.current;
+    if (r) {
+      // Width follows the pointer; height keeps the image's proportions.
+      const p = point(e);
+      setResize({ ...r, nextW: Math.max(MIN_IMAGE, r.w + (p[0] - r.start[0])) });
+      return;
+    }
     const m = moveRef.current;
     if (m) {
       const p = point(e);
@@ -135,6 +157,12 @@ export function AnnotationLayer(props: Props) {
   }
 
   function onPointerUp() {
+    const r = resizeRef.current;
+    if (r) {
+      if (Math.abs(r.nextW - r.w) >= MIN_MOVE) props.onResize(r.id, r.nextW, r.nextW / r.aspect);
+      setResize(null);
+      return;
+    }
     const m = moveRef.current;
     if (m) {
       if (Math.hypot(m.dx, m.dy) >= MIN_MOVE) props.onMove(m.id, m.dx, m.dy);
@@ -166,7 +194,18 @@ export function AnnotationLayer(props: Props) {
     setMove({ id, start: point(e), dx: 0, dy: 0 });
   };
 
-  const shown = items.map((a) => (move && move.id === a.id ? translate(a, move.dx, move.dy) : a));
+  function startResize(e: PointerEvent, a: Extract<ViewAnnotation, { type: "image" }>) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    capture(e);
+    setResize({ id: a.id, start: point(e), w: a.w, h: a.h, aspect: a.w / a.h, nextW: a.w });
+  }
+
+  const shown = items.map((a) => {
+    if (move && move.id === a.id) return translate(a, move.dx, move.dy);
+    if (resize && resize.id === a.id && a.type === "image") return { ...a, w: resize.nextW, h: resize.nextW / resize.aspect };
+    return a;
+  });
   const selected = shown.find((a) => a.id === selectedId);
   const sel = selected && selected.id !== editingId ? bounds(selected) : null;
   const editing = shown.find((a) => a.id === editingId && a.type === "text") as Extract<ViewAnnotation, { type: "text" }> | undefined;
@@ -183,12 +222,13 @@ export function AnnotationLayer(props: Props) {
       onPointerCancel={() => {
         setDraft(null);
         setMove(null);
+        setResize(null);
       }}
       className="absolute inset-0"
       style={{
-        cursor: tool === "comment" ? "copy" : tool === "add-text" ? "text" : drawing ? "crosshair" : "default",
+        cursor: tool === "comment" || tool === "image" ? "copy" : tool === "add-text" ? "text" : drawing ? "crosshair" : "default",
         // Drawing tools take over touch input; otherwise touch scrolls the page.
-        touchAction: tool === "highlight" || tool === "draw" || move ? "none" : "auto",
+        touchAction: tool === "highlight" || tool === "draw" || move || resize ? "none" : "auto",
         pointerEvents: drawing || selecting || editingId ? "auto" : "none",
       }}
       aria-label={`Annotations on page ${page + 1}`}
@@ -201,6 +241,21 @@ export function AnnotationLayer(props: Props) {
         };
         if (a.type === "highlight") {
           return <rect key={a.id} {...common} x={a.x} y={a.y} width={a.w} height={a.h} fill={a.color} fillOpacity={0.45} style={{ ...common.style, mixBlendMode: "multiply" }} />;
+        }
+        if (a.type === "image") {
+          return (
+            <image
+              key={a.id}
+              {...common}
+              href={a.src}
+              x={a.x}
+              y={a.y}
+              width={a.w}
+              height={a.h}
+              preserveAspectRatio="none"
+              aria-label={`Image ${a.name}`}
+            />
+          );
         }
         if (a.type === "ink") {
           const pts = a.points.map((p) => p.join(",")).join(" ");
@@ -316,6 +371,20 @@ export function AnnotationLayer(props: Props) {
           strokeDasharray={`${4 / scale} ${3 / scale}`}
           pointerEvents="none"
           aria-label={`Selected ${describe(selected).toLowerCase()}`}
+        />
+      )}
+      {selected?.type === "image" && selecting && (
+        <rect
+          x={selected.x + selected.w - HANDLE / scale / 2}
+          y={selected.y + selected.h - HANDLE / scale / 2}
+          width={HANDLE / scale}
+          height={HANDLE / scale}
+          fill="#ffffff"
+          stroke="#5a47e0"
+          strokeWidth={1.5 / scale}
+          onPointerDown={(e) => startResize(e, selected)}
+          style={{ cursor: "nwse-resize" }}
+          aria-label="Resize image"
         />
       )}
     </svg>

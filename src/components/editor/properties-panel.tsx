@@ -29,11 +29,12 @@ type Props = {
   // Style for new text boxes, or the selected one.
   textStyle: TextStyle;
   onTextStyle: (patch: Partial<TextStyle>) => void;
+  onChooseImage: () => void;
+  imageError: string | null;
 };
 
 const comingLater: Partial<Record<EditorTool, string>> = {
   "edit-text": "Click existing text to change it. The original text is removed and rewritten, never covered with a white box.",
-  image: "Upload an image, then place and resize it on the page.",
   shape: "Draw rectangles, circles, lines and arrows.",
   link: "Drag over an area to turn it into a clickable link.",
 };
@@ -139,6 +140,14 @@ export function PropertiesPanel(props: Props) {
           <strong className="text-sm">Selected: {describe(selected).toLowerCase()}</strong>
           <span className="text-xs text-subtle">Page {selected.page + 1}</span>
         </div>
+        {selected.type === "image" && (
+          <div className="flex flex-col gap-1 text-xs text-subtle">
+            <span className="truncate text-sm text-ink-soft">{selected.name}</span>
+            <span>
+              {Math.round(selected.w)} × {Math.round(selected.h)} pt · drag the image to move it, drag the corner handle to resize. Proportions are kept.
+            </span>
+          </div>
+        )}
         {selected.type === "text" && (
           <>
             <p className="text-xs text-subtle">Double-click the text on the page to change it. Drag it to move it.</p>
@@ -219,6 +228,26 @@ export function PropertiesPanel(props: Props) {
           <Shortcuts />
         </>
       );
+    case "image":
+      return (
+        <>
+          <p className="text-sm text-muted">Click on the page where the image should go, or add it to the middle of the current page.</p>
+          <button
+            type="button"
+            onClick={props.onChooseImage}
+            className="rounded-[10px] bg-brand px-3 py-2.5 text-sm font-semibold text-white hover:bg-brand-strong"
+          >
+            Choose image…
+          </button>
+          <p className="text-xs text-subtle">PNG, JPG, WEBP, GIF or BMP, up to 20 MB. Photos keep their original quality.</p>
+          {props.imageError && (
+            <p role="alert" className="rounded-[10px] border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger">
+              {props.imageError}
+            </p>
+          )}
+          <Shortcuts />
+        </>
+      );
     case "add-text":
       return (
         <>
@@ -233,7 +262,7 @@ export function PropertiesPanel(props: Props) {
           <p className="text-sm text-muted">{comingLater[tool]}</p>
           <div className="flex gap-2.5 rounded-xl bg-info-soft p-3.5 text-[13px] leading-normal text-info-strong">
             <Info className="mt-0.5 size-[18px] shrink-0" aria-hidden="true" />
-            <span>This tool arrives later in Phase 5. Add text, highlight, draw and comment work now.</span>
+            <span>This tool arrives later in Phase 5. Add text, image, highlight, draw and comment work now.</span>
           </div>
         </>
       );

@@ -39,6 +39,7 @@ import {
   inkColors,
   newId,
   toPdfAnnotation,
+  toPdfImage,
   toPdfText,
   translate,
   type NewAnnotation,
@@ -47,9 +48,13 @@ import {
 } from "@/components/editor/annotations";
 import { applyEdits } from "@/lib/pdf/operations/edits";
 import { downloadBytes } from "@/lib/files/download";
+import { prepareImage } from "@/lib/files/prepare-image";
 
 // Tools that work now; the others arrive later in Phase 5.
-const workingTools = new Set<EditorTool>(["select", "add-text", "highlight", "draw", "comment"]);
+const workingTools = new Set<EditorTool>(["select", "add-text", "image", "highlight", "draw", "comment"]);
+
+// New images start at most this share of the page's width and height.
+const IMAGE_MAX_SHARE = 0.4;
 
 type History = { past: ViewAnnotation[][]; present: ViewAnnotation[]; future: ViewAnnotation[][] };
 
@@ -126,6 +131,17 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  // Where the next chosen image goes; no x/y means the middle of the page.
+  const pendingImage = useRef<{ page: number; x?: number; y?: number } | null>(null);
+  // Local preview URLs for images; released when the editor closes (undo may still need them before).
+  const imageUrls = useRef<string[]>([]);
+
+  useEffect(() => {
+    const urls = imageUrls.current;
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, []);
 
   const annotations = history.present;
   const selected = annotations.find((a) => a.id === selectedId) ?? null;
@@ -151,9 +167,9 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   function addAnnotation(a: NewAnnotation) {
     const item = { ...a, id: newId() } as ViewAnnotation;
     commit([...annotations, item]);
-    // Comments and text need typing: select them and switch to Select so the next click
-    // finishes typing instead of adding another item.
-    if (item.type === "comment" || item.type === "text") {
+    // Comments and text need typing, and images usually need positioning: select them and
+    // switch to Select so the next click works on them instead of adding another item.
+    if (item.type === "comment" || item.type === "text" || item.type === "image") {
       setSelectedId(item.id);
       setTool("select");
     }
@@ -162,6 +178,51 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
 
   function moveAnnotation(id: string, dx: number, dy: number) {
     commit(annotations.map((a) => (a.id === id ? translate(a, dx, dy) : a)));
+  }
+
+  function resizeAnnotation(id: string, w: number, h: number) {
+    commit(annotations.map((a) => (a.id === id && a.type === "image" ? { ...a, w, h } : a)));
+  }
+
+  function requestImage(page: number, x?: number, y?: number) {
+    pendingImage.current = { page, x, y };
+    setImageError(null);
+    imageInputRef.current?.click();
+  }
+
+  async function placeImage(file: File) {
+    const target = pendingImage.current;
+    pendingImage.current = null;
+    if (!target || !sizes) return;
+    const result = await prepareImage(file);
+    if (!result.ok) {
+      setImageError(result.message);
+      setTool("image");
+      return;
+    }
+    const { image } = result;
+    const pageSize = sizes[target.page];
+    // Start at the image's natural size (1 pixel = 1 point), shrunk to fit if large.
+    const fit = Math.min(1, (pageSize.width * IMAGE_MAX_SHARE) / image.width, (pageSize.height * IMAGE_MAX_SHARE) / image.height);
+    const w = image.width * fit;
+    const h = image.height * fit;
+    const cx = target.x ?? pageSize.width / 2;
+    const cy = target.y ?? pageSize.height / 2;
+    const src = URL.createObjectURL(new Blob([image.bytes as BlobPart], { type: `image/${image.format}` }));
+    imageUrls.current.push(src);
+    addAnnotation({
+      type: "image",
+      page: target.page,
+      // Centre on the click, kept inside the page.
+      x: Math.min(Math.max(0, cx - w / 2), pageSize.width - w),
+      y: Math.min(Math.max(0, cy - h / 2), pageSize.height - h),
+      w,
+      h,
+      src,
+      bytes: image.bytes,
+      format: image.format,
+      name: file.name,
+    });
   }
 
   // Leaving a text box: an empty one is removed (no undo step, as it never held anything).
@@ -288,12 +349,15 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     try {
       const viewport = (page: number) => sizes[page].viewport!;
       const texts = annotations.flatMap((a) => (a.type === "text" ? [toPdfText(a, viewport(a.page))] : []));
-      const pdfAnnotations = annotations.flatMap((a) => (a.type !== "text" ? [toPdfAnnotation(a, viewport(a.page))] : []));
+      const images = annotations.flatMap((a) => (a.type === "image" ? [toPdfImage(a, viewport(a.page))] : []));
+      const pdfAnnotations = annotations.flatMap((a) =>
+        a.type !== "text" && a.type !== "image" ? [toPdfAnnotation(a, viewport(a.page))] : [],
+      );
       // The font files are only fetched when text is being saved.
       const { browserFontLoader } = await import("@/lib/pdf/fonts-browser");
       const result = await applyEdits(
         { name: doc.file.name, bytes: new Uint8Array(await doc.file.arrayBuffer()) },
-        { texts, annotations: pdfAnnotations },
+        { texts, images, annotations: pdfAnnotations },
         browserFontLoader,
       );
       downloadBytes(result.bytes, result.name);
@@ -437,6 +501,8 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                   onMove={moveAnnotation}
                   onEdit={finishEditing}
                   onText={setItemText}
+                  onRequestImage={requestImage}
+                  onResize={resizeAnnotation}
                 />
               )}
             />
@@ -509,6 +575,20 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             onDelete={deleteAnnotation}
             textStyle={textStyle}
             onTextStyle={changeTextStyle}
+            onChooseImage={() => requestImage(pageRef.current - 1)}
+            imageError={imageError}
+          />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+            aria-label="Choose image"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) placeImage(file);
+            }}
           />
         </aside>
       </div>
