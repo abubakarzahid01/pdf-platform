@@ -17,7 +17,8 @@ async function renderPage(pdf: PDFDocumentProxy, pageIndex: number) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);
   canvas.height = Math.round(viewport.height);
-  await page.render({ canvas, viewport }).promise;
+  // "print" doesn't wait for screen frames, so OCR keeps going in a background tab.
+  await page.render({ canvas, viewport, intent: "print" }).promise;
   return { image: canvas, scale };
 }
 

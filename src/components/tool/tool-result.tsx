@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Download } from "lucide-react";
 import { downloadBytes, zipFiles } from "@/lib/files/download";
 import { closePdf, loadPdfJs, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
@@ -29,6 +29,7 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
   const allPdf = outputs.every((o) => !o.mime);
   const firstNote = outputs.find((o) => o.note)?.note;
   const tablePreview = outputs.find((o) => o.table)?.table;
+  const images = outputs.filter((o) => o.mime?.startsWith("image/"));
 
   return (
     <div className="flex flex-col gap-5 rounded-panel border border-success/25 bg-success-soft/40 p-6">
@@ -45,7 +46,7 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
             </strong>
             <span className="text-sm text-muted">
               {single
-                ? `${single.name} · ${single.pageCount} page${single.pageCount > 1 ? "s" : ""} · ${formatSize(single.bytes.length)}`
+                ? `${single.name} · ${images.length ? "" : `${single.pageCount} page${single.pageCount > 1 ? "s" : ""} · `}${formatSize(single.bytes.length)}`
                 : `${formatSize(totalSize)} in total`}
             </span>
           </div>
@@ -65,6 +66,8 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
       {firstNote && <p className="text-sm text-ink-soft">{firstNote}</p>}
 
       {tablePreview && <TablePreview rows={tablePreview} />}
+
+      {images.length > 0 && <ImagesPreview images={images} />}
 
       {single && isText ? (
         <TextPreview output={single} />
@@ -108,6 +111,8 @@ function fileFormat(mime: string) {
   if (mime.startsWith("text/plain")) return { kind: "text file", label: "TXT" };
   if (mime.startsWith("text/csv")) return { kind: "CSV file", label: "CSV" };
   if (mime.includes("spreadsheetml")) return { kind: "Excel file", label: "Excel" };
+  if (mime === "image/png") return { kind: "image", label: "PNG" };
+  if (mime === "image/jpeg") return { kind: "image", label: "JPG" };
   return { kind: "file", label: "file" };
 }
 
@@ -131,6 +136,40 @@ function TablePreview({ rows }: { rows: string[][] }) {
       </table>
     </div>
   );
+}
+
+// Thumbnails of the first few image results.
+function ImagesPreview({ images }: { images: OutputFile[] }) {
+  const shown = images.slice(0, PREVIEW_PAGES);
+  return (
+    <>
+      <div className="flex items-start gap-4 overflow-x-auto pb-2">
+        {shown.map((o) => (
+          <div key={o.name} className="flex shrink-0 flex-col items-center gap-2">
+            <ImageThumb output={o} />
+            <span className="max-w-[112px] truncate text-xs text-muted">{o.name}</span>
+          </div>
+        ))}
+      </div>
+      {images.length > shown.length && (
+        <p className="text-[13px] text-subtle">
+          Showing the first {shown.length} of {images.length} images.
+        </p>
+      )}
+    </>
+  );
+}
+
+function ImageThumb({ output }: { output: OutputFile }) {
+  const ref = useRef<HTMLImageElement>(null);
+  // The object URL lives only while the thumbnail is on screen.
+  useEffect(() => {
+    const url = URL.createObjectURL(new Blob([output.bytes as BlobPart], { type: output.mime }));
+    if (ref.current) ref.current.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [output]);
+  // eslint-disable-next-line @next/next/no-img-element -- local object URL, not an optimisable asset
+  return <img ref={ref} alt="" width={112} className="h-auto w-[112px] rounded bg-white shadow-[0_1px_3px_rgb(21_19_43/0.15)]" />;
 }
 
 const TEXT_PREVIEW_CHARS = 4000;

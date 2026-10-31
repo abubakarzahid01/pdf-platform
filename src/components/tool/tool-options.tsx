@@ -161,16 +161,28 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
             <Segmented options={["PNG", "JPG"]} value={text("format")} onChange={set("format")} />
           </Field>
           <SelectField label="Quality" options={["Standard (150 DPI)", "High (300 DPI)", "Screen (72 DPI)"]} value={text("quality")} onChange={set("quality")} />
+          <p className="text-[13px] text-subtle">
+            Every page becomes one image. PNG keeps text sharpest; JPG makes smaller files, best for photos. Several pages
+            download together as a ZIP.
+          </p>
         </>
       );
     case "images-to-pdf":
       return (
         <>
           <SelectField label="Page size" options={["Fit to image", "A4", "Letter"]} value={text("pageSize")} onChange={set("pageSize")} />
-          <Field label="Orientation">
-            <Segmented options={["Auto", "Portrait", "Landscape"]} value={text("orientation")} onChange={set("orientation")} />
-          </Field>
+          {values.pageSize !== "Fit to image" && (
+            <Field label="Orientation">
+              <Segmented options={["Auto", "Portrait", "Landscape"]} value={text("orientation")} onChange={set("orientation")} />
+            </Field>
+          )}
           <SelectField label="Margin" options={["None", "Small", "Large"]} value={text("margin")} onChange={set("margin")} />
+          <p className="text-[13px] text-subtle">
+            Each image goes on its own page, in the order shown; use the arrows to change it.{" "}
+            {values.pageSize === "Fit to image"
+              ? "Each page is the size of its image."
+              : "Images are scaled to fit the page and centred, never stretched."}
+          </p>
         </>
       );
     case "pdf-to-excel":

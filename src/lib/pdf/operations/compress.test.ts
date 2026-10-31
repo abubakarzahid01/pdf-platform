@@ -52,7 +52,8 @@ async function imageSizes(bytes: Uint8Array) {
   return sizes.sort((a, b) => b.width - a.width);
 }
 
-describe("compressPdf", () => {
+// Image recompression is CPU-heavy; with other test files running in parallel it can pass 5 s.
+describe("compressPdf", { timeout: 30_000 }, () => {
   it("shrinks large JPEG and lossless images, keeping pages", async () => {
     const input = fixture("images-heavy.pdf");
     const result = await compressPdf(input, "recommended", testRecoder);

@@ -164,7 +164,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   let note = "Add a file to get started.";
   if (checking) note = "Checking your files…";
   else if (errors > 0) note = `Remove the ${errors === 1 ? "file" : `${errors} files`} with problems to continue.`;
-  else if (hasFiles && (opensWorkspace || runnable) && !enoughFiles) note = `Add at least ${minimumFiles(slug)} PDFs.`;
+  else if (hasFiles && (opensWorkspace || runnable) && !enoughFiles) note = `Add at least ${minimumFiles(slug)} ${slug === "images-to-pdf" ? "images" : "PDFs"}.`;
   else if (canAct) note = "Your files stay in your browser. Nothing is uploaded.";
   else if (hasFiles && !runnable && !opensWorkspace) note = "Files checked. Processing for this tool arrives in a later phase.";
 
@@ -174,7 +174,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
         {outputs ? (
           <ToolResult
             outputs={outputs}
-            zipName={`${baseName(firstValid?.file.name ?? "document")}-${slug === "pdf-to-csv" ? "tables" : "split"}.zip`}
+            zipName={`${baseName(firstValid?.file.name ?? "document")}-${slug === "pdf-to-csv" ? "tables" : slug === "pdf-to-images" ? "pages" : "split"}.zip`}
             onBack={invalidate}
             onReset={reset}
           />
@@ -184,7 +184,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
               files={items.map((i) => i.file)}
               statuses={items.map((i) => i.status)}
               onRemove={removeAt}
-              onMove={slug === "merge-pdf" ? move : undefined}
+              onMove={slug === "merge-pdf" || slug === "images-to-pdf" ? move : undefined}
             />
             <div className="flex flex-wrap gap-4">
               {input.multiple && (

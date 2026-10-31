@@ -1,11 +1,13 @@
 import { compressPdf, type CompressLevel } from "@/lib/pdf/operations/compress";
+import { imagesToPdf, type ImagesToPdfOptions, type PdfReadyImage } from "@/lib/pdf/operations/images-to-pdf";
 import { mergePdfs } from "@/lib/pdf/operations/merge";
 import { organizePdf, type PagePlan } from "@/lib/pdf/operations/organize";
+import { pdfToImages } from "@/lib/pdf/operations/pdf-to-images";
 import { pdfToText, type PageBreaks } from "@/lib/pdf/operations/pdf-to-text";
 import { pdfToSpreadsheet, type TableLayout } from "@/lib/pdf/operations/pdf-to-spreadsheet";
 import { rotatePdf, type RotateAngle, type RotateWhich } from "@/lib/pdf/operations/rotate";
 import { splitPdf, type SplitMode } from "@/lib/pdf/operations/split";
-import type { InputPdf, OutputFile } from "@/lib/pdf/operations/types";
+import { OperationError, type InputPdf, type OutputFile } from "@/lib/pdf/operations/types";
 
 // Tools whose processing is implemented. Everything runs in the browser.
 export const runnableTools = new Set([
@@ -17,6 +19,8 @@ export const runnableTools = new Set([
   "pdf-to-text",
   "pdf-to-excel",
   "pdf-to-csv",
+  "images-to-pdf",
+  "pdf-to-images",
 ]);
 
 // Minimum number of valid files each tool needs.
@@ -43,6 +47,21 @@ export async function runTool(slug: string, inputs: InputPdf[], options: Record<
       const { browserTextItemReader } = await import("@/lib/pdf/text-items-browser");
       const layout: TableLayout = options.tables === "All in one sheet" ? "single" : "per-table";
       return pdfToSpreadsheet(inputs[0], slug === "pdf-to-excel" ? "xlsx" : "csv", layout, browserTextItemReader);
+    }
+    case "images-to-pdf": {
+      const { prepareImage } = await import("@/lib/files/prepare-image");
+      const images: PdfReadyImage[] = [];
+      for (const input of inputs) {
+        const prepared = await prepareImage(new Blob([input.bytes as BlobPart]));
+        if (!prepared.ok) throw new OperationError(`${input.name}: ${prepared.message}`);
+        images.push({ name: input.name, ...prepared.image });
+      }
+      return [await imagesToPdf(images, options as unknown as ImagesToPdfOptions)];
+    }
+    case "pdf-to-images": {
+      const { openBrowserRenderer } = await import("@/lib/pdf/render-pages-browser");
+      const dpi = Number(/(d+) DPI/.exec(String(options.quality))?.[1] ?? 150);
+      return pdfToImages(inputs[0], options.format === "JPG" ? "jpeg" : "png", dpi, openBrowserRenderer);
     }
     case "compress-pdf": {
       // Loaded on demand: only the Compress tool needs the image recoder.

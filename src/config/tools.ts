@@ -111,7 +111,7 @@ const inputSpecs: Record<string, Omit<InputSpec, "multiple">> = {
   "word-to-pdf": { accept: ".doc,.docx,.odt,.rtf,.txt", label: "DOC, DOCX, ODT, RTF or TXT", kinds: ["zip", "ole", "rtf", "text"], expected: "a Word document" },
   "excel-to-pdf": { accept: ".xls,.xlsx,.ods", label: "XLS, XLSX or ODS", kinds: ["zip", "ole"], expected: "an Excel workbook" },
   "powerpoint-to-pdf": { accept: ".ppt,.pptx,.odp", label: "PPT, PPTX or ODP", kinds: ["zip", "ole"], expected: "a PowerPoint presentation" },
-  "images-to-pdf": { accept: ".jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff", label: "JPG, PNG, WEBP and other images", kinds: ["png", "jpeg", "gif", "webp", "bmp", "tiff"], expected: "an image" },
+  "images-to-pdf": { accept: ".jpg,.jpeg,.png,.webp,.gif,.bmp", label: "JPG, PNG, WEBP, GIF or BMP", kinds: ["png", "jpeg", "gif", "webp", "bmp"], expected: "an image" },
 };
 
 const pdfInput: Omit<InputSpec, "multiple"> = { accept: ".pdf,application/pdf", label: "PDF", kinds: ["pdf"], expected: "a PDF" };

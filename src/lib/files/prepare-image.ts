@@ -44,7 +44,7 @@ async function encode(bitmap: ImageBitmap, type: "image/png" | "image/jpeg") {
  * Other formats are converted to PNG; JPEGs with an orientation tag are re-drawn
  * upright, because PDFs ignore that tag while browsers obey it.
  */
-export async function prepareImage(file: File): Promise<PrepareResult> {
+export async function prepareImage(file: Blob): Promise<PrepareResult> {
   if (file.size === 0) return { ok: false, message: "This image file is empty." };
   if (file.size > MAX_IMAGE_MB * 1024 * 1024) return { ok: false, message: `Images can be up to ${MAX_IMAGE_MB} MB.` };
 

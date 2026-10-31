@@ -41,6 +41,6 @@ export function detectKind(head: Uint8Array): FileKind {
   return "unknown";
 }
 
-export async function readHead(file: File, length = 1024) {
+export async function readHead(file: Blob, length = 1024) {
   return new Uint8Array(await file.slice(0, length).arrayBuffer());
 }
