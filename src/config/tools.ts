@@ -66,7 +66,7 @@ export const tools: Tool[] = [
   { slug: "rotate-pdf", name: "Rotate PDF", description: "Rotate some or all pages.", category: "organise", icon: RotateCw, tone: "info" },
   { slug: "crop-pdf", name: "Crop PDF", description: "Trim margins or select a page area.", category: "organise", icon: Crop, tone: "info" },
   { slug: "add-page-numbers", name: "Add page numbers", description: "Number pages with your chosen position and style.", category: "organise", icon: Hash, tone: "info" },
-  { slug: "add-watermark", name: "Add watermark", description: "Stamp text or an image across pages.", category: "organise", icon: Stamp, tone: "info" },
+  { slug: "add-watermark", name: "Add watermark", description: "Stamp text such as CONFIDENTIAL across every page.", category: "organise", icon: Stamp, tone: "info" },
 
   // Convert to PDF
   { slug: "word-to-pdf", name: "Word to PDF", description: "DOC and DOCX to PDF with layout preserved.", category: "convert-to", icon: FileInput, tone: "neutral", popular: true },

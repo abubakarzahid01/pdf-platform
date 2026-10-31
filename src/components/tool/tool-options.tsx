@@ -10,7 +10,7 @@ export const optionDefaults: Record<string, OptionValues> = {
   "compress-pdf": { level: "Recommended" },
   "split-pdf": { mode: "ranges", pages: "" },
   "rotate-pdf": { angle: "90", which: "all" },
-  "add-page-numbers": { position: "Bottom centre", format: "1, 2, 3", start: "1" },
+  "add-page-numbers": { position: "Bottom centre", format: "1, 2, 3", start: "1", skipFirst: false },
   "add-watermark": { text: "", position: "Diagonal centre", opacity: "35%" },
   "protect-pdf": { password: "", repeat: "" },
   "pdf-to-images": { format: "PNG", quality: "Standard (150 DPI)" },
@@ -133,9 +133,11 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
     case "add-page-numbers":
       return (
         <>
-          <SelectField label="Position" options={["Bottom centre", "Bottom right", "Bottom left", "Top centre", "Top right"]} value={text("position")} onChange={set("position")} />
+          <SelectField label="Position" options={["Bottom centre", "Bottom right", "Bottom left", "Top centre", "Top right", "Top left"]} value={text("position")} onChange={set("position")} />
           <SelectField label="Format" options={["1, 2, 3", "Page 1 of N", "i, ii, iii"]} value={text("format")} onChange={set("format")} />
           <TextField label="Start at" type="number" value={text("start")} onChange={set("start")} />
+          <Checkbox label="Don't number the first page (cover)" checked={bool("skipFirst")} onChange={set("skipFirst")} />
+          <p className="text-[13px] text-subtle">Numbers are placed upright as each page is shown, including turned pages.</p>
         </>
       );
     case "add-watermark":
@@ -144,6 +146,10 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
           <TextField label="Watermark text" placeholder="e.g. CONFIDENTIAL" value={text("text")} onChange={set("text")} />
           <SelectField label="Position" options={["Diagonal centre", "Centre", "Top", "Bottom"]} value={text("position")} onChange={set("position")} />
           <SelectField label="Opacity" options={["20%", "35%", "50%", "75%"]} value={text("opacity")} onChange={set("opacity")} />
+          <p className="text-[13px] text-subtle">
+            The text is added in grey on top of every page and sized to fit. A watermark marks a document; it doesn&apos;t stop
+            anyone from removing it with editing software.
+          </p>
         </>
       );
     case "protect-pdf":

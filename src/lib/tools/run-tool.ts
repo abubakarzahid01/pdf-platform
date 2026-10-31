@@ -5,6 +5,7 @@ import { organizePdf, type PagePlan } from "@/lib/pdf/operations/organize";
 import { pdfToImages } from "@/lib/pdf/operations/pdf-to-images";
 import { pdfToText, type PageBreaks } from "@/lib/pdf/operations/pdf-to-text";
 import { pdfToSpreadsheet, type TableLayout } from "@/lib/pdf/operations/pdf-to-spreadsheet";
+import { addPageNumbers, addWatermark, type NumberFormat, type NumberPosition, type WatermarkPosition } from "@/lib/pdf/operations/stamp";
 import { rotatePdf, type RotateAngle, type RotateWhich } from "@/lib/pdf/operations/rotate";
 import { splitPdf, type SplitMode } from "@/lib/pdf/operations/split";
 import { OperationError, type InputPdf, type OutputFile } from "@/lib/pdf/operations/types";
@@ -21,6 +22,8 @@ export const runnableTools = new Set([
   "pdf-to-csv",
   "images-to-pdf",
   "pdf-to-images",
+  "add-page-numbers",
+  "add-watermark",
 ]);
 
 // Minimum number of valid files each tool needs.
@@ -62,6 +65,20 @@ export async function runTool(slug: string, inputs: InputPdf[], options: Record<
       const { openBrowserRenderer } = await import("@/lib/pdf/render-pages-browser");
       const dpi = Number(/(d+) DPI/.exec(String(options.quality))?.[1] ?? 150);
       return pdfToImages(inputs[0], options.format === "JPG" ? "jpeg" : "png", dpi, openBrowserRenderer);
+    }
+    case "add-page-numbers":
+      return [
+        await addPageNumbers(inputs[0], {
+          position: options.position as NumberPosition,
+          format: options.format as NumberFormat,
+          start: Number(options.start),
+          skipFirst: Boolean(options.skipFirst),
+        }),
+      ];
+    case "add-watermark": {
+      const { browserFontLoader } = await import("@/lib/pdf/fonts-browser");
+      const opacity = parseInt(String(options.opacity), 10) / 100;
+      return [await addWatermark(inputs[0], { text: String(options.text ?? ""), position: options.position as WatermarkPosition, opacity }, browserFontLoader)];
     }
     case "compress-pdf": {
       // Loaded on demand: only the Compress tool needs the image recoder.
