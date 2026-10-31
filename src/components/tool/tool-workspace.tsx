@@ -153,7 +153,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
       const inputs = await Promise.all(
         valid.map(async (i) => ({ name: i.file.name, bytes: new Uint8Array(await i.file.arrayBuffer()) })),
       );
-      setOutputs(await runTool(slug, inputs, { ...options, plan }));
+      setOutputs(await runTool(slug, inputs, { ...options, plan, pageCount: firstValid?.pageCount ?? 0 }));
     } catch (error) {
       setRunError(error instanceof OperationError ? error.message : "Something went wrong while processing. Your file may use features we can't handle yet.");
     } finally {

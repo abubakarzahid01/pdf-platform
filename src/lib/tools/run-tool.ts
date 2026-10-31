@@ -1,5 +1,6 @@
 import { compressPdf, type CompressLevel } from "@/lib/pdf/operations/compress";
 import { cropPdf } from "@/lib/pdf/operations/crop";
+import { protectPdf } from "@/lib/pdf/operations/protect";
 import { imagesToPdf, type ImagesToPdfOptions, type PdfReadyImage } from "@/lib/pdf/operations/images-to-pdf";
 import { mergePdfs } from "@/lib/pdf/operations/merge";
 import { organizePdf, type PagePlan } from "@/lib/pdf/operations/organize";
@@ -26,6 +27,7 @@ export const runnableTools = new Set([
   "add-page-numbers",
   "add-watermark",
   "crop-pdf",
+  "protect-pdf",
 ]);
 
 // Minimum number of valid files each tool needs.
@@ -93,6 +95,11 @@ export async function runTool(slug: string, inputs: InputPdf[], options: Record<
         return value;
       };
       return [await cropPdf(inputs[0], { mode: "margins", margins: { top: mm("top"), right: mm("right"), bottom: mm("bottom"), left: mm("left") } })];
+    }
+    case "protect-pdf": {
+      const { browserQpdf, browserProtectedCheck } = await import("@/lib/pdf/qpdf-browser");
+      const password = String(options.password ?? "");
+      return [await protectPdf(inputs[0], password, String(options.repeat ?? ""), browserQpdf, browserProtectedCheck, Number(options.pageCount))];
     }
     case "compress-pdf": {
       // Loaded on demand: only the Compress tool needs the image recoder.

@@ -155,9 +155,12 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
     case "protect-pdf":
       return (
         <>
-          <TextField label="Password" type="password" placeholder="At least 8 characters" value={text("password")} onChange={set("password")} />
+          <TextField label="Password" type="password" placeholder="At least 6 characters" value={text("password")} onChange={set("password")} />
           <TextField label="Repeat password" type="password" value={text("repeat")} onChange={set("repeat")} />
-          <p className="text-[13px] text-subtle">We never store your password. If you lose it, the file cannot be recovered.</p>
+          <p className="text-[13px] text-subtle">
+            The file is locked with AES-256 encryption in your browser; your password and file are never sent anywhere. Anyone
+            with the password can open it. If you lose the password, the file can&apos;t be recovered.
+          </p>
         </>
       );
     case "pdf-to-images":

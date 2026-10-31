@@ -40,5 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# OCR engine files, copied from node_modules by scripts/copy-ocr-assets.mjs
+# Browser engine files, copied from node_modules by scripts/copy-engine-assets.mjs
 /public/ocr/
+/public/qpdf/

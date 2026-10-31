@@ -3,7 +3,7 @@ import type { PageItems } from "@/lib/pdf/text-items";
 import { withOcr, type OcrBlock } from "./ocr";
 
 // Text recognition in the browser with Tesseract.js. The engine and English language data
-// are served by this site from /ocr (copied by scripts/copy-ocr-assets.mjs), so nothing is
+// are served by this site from /ocr (copied by scripts/copy-engine-assets.mjs), so nothing is
 // fetched from other servers and the page images never leave the device.
 
 // Long side of the page image in pixels: about 300 dpi for A4/Letter, which suits Tesseract.

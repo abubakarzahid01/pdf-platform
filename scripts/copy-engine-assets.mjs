@@ -1,5 +1,6 @@
-// Copies the OCR engine and English language data into public/ocr/ so the site serves
-// them itself instead of loading code from a third-party CDN at runtime.
+// Copies the browser engines into public/ so the site serves them itself instead of loading
+// code from a third-party CDN at runtime: the OCR engine and English language data
+// (public/ocr/) and qpdf for password protection (public/qpdf/).
 // Runs automatically after `npm install` and before `npm run dev` / `npm run build`.
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -9,6 +10,8 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const out = fileURLToPath(new URL("../public/ocr/", import.meta.url));
 mkdirSync(join(out, "lang"), { recursive: true });
+const qpdfOut = fileURLToPath(new URL("../public/qpdf/", import.meta.url));
+mkdirSync(qpdfOut, { recursive: true });
 
 const tesseractDist = join(dirname(require.resolve("tesseract.js/package.json")), "dist");
 const core = dirname(require.resolve("tesseract.js-core/package.json"));
@@ -21,9 +24,13 @@ for (const file of readdirSync(core).filter((f) => /^tesseract-core.*lstm\.wasm\
   copies.push([join(core, file), join(out, file)]);
 }
 copies.push([join(lang, "eng.traineddata.gz"), join(out, "lang", "eng.traineddata.gz")]);
+const qpdf = join(dirname(require.resolve("@neslinesli93/qpdf-wasm/package.json")), "dist");
+// The loader is served too and loaded as a plain script: bundling it would pull in its
+// Node-only code paths.
+copies.push([join(qpdf, "qpdf.wasm"), join(qpdfOut, "qpdf.wasm")], [join(qpdf, "qpdf.js"), join(qpdfOut, "qpdf.js")]);
 
 for (const [from, to] of copies) {
   if (!existsSync(from)) throw new Error(`OCR asset missing: ${from}`);
   copyFileSync(from, to);
 }
-console.log(`OCR assets copied to public/ocr (${copies.length} files)`);
+console.log(`Engine files copied to public/ocr and public/qpdf (${copies.length} files)`);

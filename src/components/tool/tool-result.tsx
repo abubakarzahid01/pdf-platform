@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Download } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Lock } from "lucide-react";
 import { downloadBytes, zipFiles } from "@/lib/files/download";
 import { closePdf, loadPdfJs, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import type { OutputFile } from "@/lib/pdf/operations/types";
@@ -71,6 +71,11 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
 
       {single && isText ? (
         <TextPreview output={single} />
+      ) : single?.locked ? (
+        <p className="flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink-soft">
+          <Lock className="size-4 shrink-0 text-brand-strong" aria-hidden="true" />
+          Checked: it opens with your password and has all {single.pageCount} page{single.pageCount > 1 ? "s" : ""}. There&apos;s no preview, because it&apos;s locked.
+        </p>
       ) : single && !single.mime ? (
         <ResultPreview output={single} />
       ) : single ? null : (

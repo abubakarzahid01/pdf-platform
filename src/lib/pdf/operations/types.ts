@@ -7,7 +7,8 @@ export type InputPdf = { name: string; bytes: Uint8Array };
 // `unchanged` marks an output that is the original file returned as-is.
 // `mime` is set for outputs that aren't PDFs (text, spreadsheets, ...).
 // `table` is a preview of tabular results (first rows of the first table).
-export type OutputFile = { name: string; bytes: Uint8Array; pageCount: number; note?: string; unchanged?: boolean; mime?: string; table?: string[][] };
+// `locked` marks a password-protected result, which can't be previewed without the password.
+export type OutputFile = { name: string; bytes: Uint8Array; pageCount: number; note?: string; unchanged?: boolean; mime?: string; table?: string[][]; locked?: boolean };
 
 export class OperationError extends Error {
   constructor(message: string) {

@@ -12,8 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Third-party OCR engine files copied by scripts/copy-ocr-assets.mjs:
+    // Third-party engine files copied by scripts/copy-engine-assets.mjs:
     "public/ocr/**",
+    "public/qpdf/**",
   ]),
 ]);
 

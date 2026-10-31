@@ -4,8 +4,8 @@ An all-in-one web platform to edit, convert, organise and extract data from PDF,
 
 > Status: working today: upload checks, the editor (edit existing text, add text, images, signatures,
 > shapes, links, highlights, drawing, comments), merge, split, rotate, organise, compress, crop,
-> page numbers, watermark, images to PDF, PDF to images, PDF to text, PDF to Excel/CSV and
-> Invoice to Excel, with OCR for scanned pages. Everything runs in the browser.
+> page numbers, watermark, images to PDF, PDF to images, PDF to text, PDF to Excel/CSV,
+> Invoice to Excel and Protect PDF, with OCR for scanned pages. Everything runs in the browser.
 > Goal now: finish the core PDF tools, test them, host cheaply and launch. No AI features, paid APIs
 > or monetisation in the current scope.
 
@@ -93,7 +93,7 @@ Every significant library must be safe for commercial, closed-source use.
 | Test images | jpeg-js | BSD-3-Clause | ✅ installed (dev only) |
 | Standard font metrics | @pdf-lib/standard-fonts | MIT | ✅ existing-text editing (Phase 5) |
 | Script runner | vite-node | MIT | ✅ installed (dev only) |
-| Passwords; large-file compression | qpdf (server) | Apache-2.0 | Later |
+| Password protection | qpdf 12 compiled to WebAssembly (@neslinesli93/qpdf-wasm) | Apache-2.0 (qpdf), ISC (wrapper) | ✅ AES-256 in the browser, served from /qpdf |
 
 **Avoided:** Ghostscript and MuPDF are AGPL — using them in a web service would require
 publishing our source code, unless a commercial licence is bought. Revisit only if needed.
@@ -115,9 +115,9 @@ SDK (Apryse, Nutrient, MuPDF commercial) once revenue justifies it.
 
 1. ✅ Remove AI and pricing items from the site (Stage 1)
 2. ✅ Free browser tools: images to PDF, PDF to images, page numbers, watermark, crop, signature
-3. **Protect PDF (open-source encryption in the browser, licence to be checked)** ← next
-4. Office conversions: hidden at launch unless a free option is found; PDF to Word only if quality is good enough
-5. Full testing and mobile layout
+3. ✅ Protect PDF (qpdf in the browser, AES-256)
+4. **Office conversions: hidden at launch unless a free option is found; PDF to Word only if quality is good enough** ← next
+5. Full testing and mobile layout, plus a third-party licences page (Apache-2.0 notices for PDF.js, Tesseract and qpdf)
 6. Low-cost hosting (Cloudflare Pages free plan; domain is the only cost)
 7. Launch, watch real usage, improve from feedback
 
