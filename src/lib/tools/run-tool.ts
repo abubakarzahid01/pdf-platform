@@ -1,4 +1,5 @@
 import { compressPdf, type CompressLevel } from "@/lib/pdf/operations/compress";
+import { cropPdf } from "@/lib/pdf/operations/crop";
 import { imagesToPdf, type ImagesToPdfOptions, type PdfReadyImage } from "@/lib/pdf/operations/images-to-pdf";
 import { mergePdfs } from "@/lib/pdf/operations/merge";
 import { organizePdf, type PagePlan } from "@/lib/pdf/operations/organize";
@@ -24,6 +25,7 @@ export const runnableTools = new Set([
   "pdf-to-images",
   "add-page-numbers",
   "add-watermark",
+  "crop-pdf",
 ]);
 
 // Minimum number of valid files each tool needs.
@@ -79,6 +81,18 @@ export async function runTool(slug: string, inputs: InputPdf[], options: Record<
       const { browserFontLoader } = await import("@/lib/pdf/fonts-browser");
       const opacity = parseInt(String(options.opacity), 10) / 100;
       return [await addWatermark(inputs[0], { text: String(options.text ?? ""), position: options.position as WatermarkPosition, opacity }, browserFontLoader)];
+    }
+    case "crop-pdf": {
+      if (options.mode === "Remove white margins") {
+        const { browserContentFinder } = await import("@/lib/pdf/content-bounds-browser");
+        return [await cropPdf(inputs[0], { mode: "auto", findContent: browserContentFinder })];
+      }
+      const mm = (key: string) => {
+        const value = Number(String(options[key] ?? "0").replace(",", "."));
+        if (!Number.isFinite(value) || value < 0) throw new OperationError("Margins must be numbers of 0 or more, in millimetres.");
+        return value;
+      };
+      return [await cropPdf(inputs[0], { mode: "margins", margins: { top: mm("top"), right: mm("right"), bottom: mm("bottom"), left: mm("left") } })];
     }
     case "compress-pdf": {
       // Loaded on demand: only the Compress tool needs the image recoder.

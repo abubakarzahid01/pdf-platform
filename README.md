@@ -2,9 +2,10 @@
 
 An all-in-one web platform to edit, convert, organise and extract data from PDF, Word, Excel and PowerPoint files.
 
-> Status: working today: upload checks, the editor (edit existing text, add text, images, shapes,
-> links, highlights, drawing, comments), merge, split, rotate, organise, compress, PDF to text,
-> PDF to Excel/CSV and Invoice to Excel, with OCR for scanned pages. Everything runs in the browser.
+> Status: working today: upload checks, the editor (edit existing text, add text, images, signatures,
+> shapes, links, highlights, drawing, comments), merge, split, rotate, organise, compress, crop,
+> page numbers, watermark, images to PDF, PDF to images, PDF to text, PDF to Excel/CSV and
+> Invoice to Excel, with OCR for scanned pages. Everything runs in the browser.
 > Goal now: finish the core PDF tools, test them, host cheaply and launch. No AI features, paid APIs
 > or monetisation in the current scope.
 
@@ -83,6 +84,7 @@ Every significant library must be safe for commercial, closed-source use.
 | ZIP downloads | fflate | MIT | ✅ installed |
 | Font embedding | @pdf-lib/fontkit | MIT | ✅ add text (Phase 5) |
 | Font for added text | Inter via @expo-google-fonts/inter | OFL-1.1 (font), MIT (package) | ✅ embedded in full; subsetting damaged glyphs |
+| Typed signatures | Dancing Script via @expo-google-fonts/dancing-script | OFL-1.1 (font), MIT (package) | ✅ drawn into the signature image; the font itself isn't embedded |
 | Automated tests | Vitest | MIT | ✅ installed (dev only) |
 | Excel / CSV export | Own small XLSX/CSV writer on fflate | MIT | ✅ PDF to Excel/CSV, invoice export (Phase 6) |
 | Office → PDF | LibreOffice (headless, server) | MPL-2.0 | Conversion phase |
@@ -112,8 +114,8 @@ SDK (Apryse, Nutrient, MuPDF commercial) once revenue justifies it.
 ## Launch plan
 
 1. ✅ Remove AI and pricing items from the site (Stage 1)
-2. **Free browser tools: images to PDF, PDF to images, page numbers, watermark, crop, signature** ← next
-3. Protect PDF (open-source encryption in the browser, licence to be checked)
+2. ✅ Free browser tools: images to PDF, PDF to images, page numbers, watermark, crop, signature
+3. **Protect PDF (open-source encryption in the browser, licence to be checked)** ← next
 4. Office conversions: hidden at launch unless a free option is found; PDF to Word only if quality is good enough
 5. Full testing and mobile layout
 6. Low-cost hosting (Cloudflare Pages free plan; domain is the only cost)

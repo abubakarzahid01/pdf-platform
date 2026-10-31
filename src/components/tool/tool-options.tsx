@@ -17,7 +17,7 @@ export const optionDefaults: Record<string, OptionValues> = {
   "images-to-pdf": { pageSize: "Fit to image", orientation: "Auto", margin: "None" },
   "pdf-to-excel": { tables: "One sheet per table" },
   "pdf-to-csv": { tables: "One sheet per table" },
-  "crop-pdf": { mode: "Remove white margins" },
+  "crop-pdf": { mode: "Remove white margins", top: "10", right: "10", bottom: "10", left: "10" },
   "pdf-to-text": { breaks: "marked" },
 };
 
@@ -209,9 +209,25 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
       );
     case "crop-pdf":
       return (
-        <Field label="Crop mode">
-          <Segmented options={["Remove white margins", "Select area"]} value={text("mode")} onChange={set("mode")} />
-        </Field>
+        <>
+          <Field label="Crop mode">
+            <Segmented options={["Remove white margins", "Set margins"]} value={text("mode")} onChange={set("mode")} />
+          </Field>
+          {values.mode === "Set margins" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <TextField label="Top (mm)" type="number" value={text("top")} onChange={set("top")} />
+              <TextField label="Bottom (mm)" type="number" value={text("bottom")} onChange={set("bottom")} />
+              <TextField label="Left (mm)" type="number" value={text("left")} onChange={set("left")} />
+              <TextField label="Right (mm)" type="number" value={text("right")} onChange={set("right")} />
+            </div>
+          ) : null}
+          <p className="text-[13px] text-subtle">
+            {values.mode === "Set margins"
+              ? "The same amount is cut from every page, measured as each page is shown."
+              : "Each page is trimmed to its content, keeping a small border. Blank pages are left as they are."}{" "}
+            Cropping hides what&apos;s outside the new edges; it doesn&apos;t delete it from the file.
+          </p>
+        </>
       );
     case "pdf-to-text":
       return (

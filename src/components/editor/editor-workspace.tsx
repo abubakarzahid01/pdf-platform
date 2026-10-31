@@ -20,6 +20,7 @@ import {
   Plus,
   Redo2,
   Shapes,
+  Signature,
   Type,
   Undo2,
   type LucideIcon,
@@ -57,12 +58,15 @@ import {
 import { applyEdits } from "@/lib/pdf/operations/edits";
 import { OperationError } from "@/lib/pdf/operations/types";
 import { downloadBytes } from "@/lib/files/download";
-import { prepareImage } from "@/lib/files/prepare-image";
+import { prepareImage, type PreparedImage } from "@/lib/files/prepare-image";
+import type { SignatureImage } from "@/components/editor/signature-pad";
 
-const workingTools = new Set<EditorTool>(["select", "edit-text", "add-text", "image", "shape", "link", "highlight", "draw", "comment"]);
+const workingTools = new Set<EditorTool>(["select", "edit-text", "add-text", "image", "sign", "shape", "link", "highlight", "draw", "comment"]);
 
 // New images start at most this share of the page's width and height.
 const IMAGE_MAX_SHARE = 0.4;
+// New signatures start this wide (about 5.5 cm), a usual size for signing a form.
+const SIGNATURE_WIDTH = 155;
 
 type History = { past: ViewAnnotation[][]; present: ViewAnnotation[]; future: ViewAnnotation[][] };
 
@@ -71,6 +75,7 @@ export type EditorTool =
   | "edit-text"
   | "add-text"
   | "image"
+  | "sign"
   | "shape"
   | "link"
   | "highlight"
@@ -87,6 +92,7 @@ const toolGroups: { id: EditorTool; label: string; icon: LucideIcon }[][] = [
     { id: "link", label: "Link", icon: LinkIcon },
   ],
   [
+    { id: "sign", label: "Sign", icon: Signature },
     { id: "highlight", label: "Highlight", icon: Highlighter },
     { id: "draw", label: "Draw", icon: Pencil },
     { id: "comment", label: "Comment", icon: MessageSquare },
@@ -285,15 +291,26 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     const result = await prepareImage(file);
     if (!result.ok) {
       setImageError(result.message);
-      setTool("image");
       return;
     }
-    const { image } = result;
+    addImage(result.image, file.name, target);
+  }
+
+  // Adds a picture of a signature to the middle of the current page.
+  function placeSignature(signature: SignatureImage) {
+    if (!sizes) return;
+    const page = pageRef.current - 1;
+    const scale = Math.min(SIGNATURE_WIDTH / signature.width, (sizes[page].width * IMAGE_MAX_SHARE) / signature.width);
+    addImage({ ...signature, format: "png" }, "Signature", { page }, { w: signature.width * scale, h: signature.height * scale });
+  }
+
+  function addImage(image: PreparedImage, name: string, target: { page: number; x?: number; y?: number }, size?: { w: number; h: number }) {
+    if (!sizes) return;
     const pageSize = sizes[target.page];
     // Start at the image's natural size (1 pixel = 1 point), shrunk to fit if large.
     const fit = Math.min(1, (pageSize.width * IMAGE_MAX_SHARE) / image.width, (pageSize.height * IMAGE_MAX_SHARE) / image.height);
-    const w = image.width * fit;
-    const h = image.height * fit;
+    const w = size?.w ?? image.width * fit;
+    const h = size?.h ?? image.height * fit;
     const cx = target.x ?? pageSize.width / 2;
     const cy = target.y ?? pageSize.height / 2;
     const src = URL.createObjectURL(new Blob([image.bytes as BlobPart], { type: `image/${image.format}` }));
@@ -309,7 +326,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
       src,
       bytes: image.bytes,
       format: image.format,
-      name: file.name,
+      name,
     });
   }
 
@@ -711,6 +728,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             textStyle={textStyle}
             onTextStyle={changeTextStyle}
             onChooseImage={() => requestImage(pageRef.current - 1)}
+            onPlaceSignature={placeSignature}
             imageError={imageError}
             shapeStyle={shapeStyle}
             onShapeStyle={changeShapeStyle}

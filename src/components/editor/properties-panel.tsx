@@ -17,6 +17,7 @@ import {
 } from "@/components/editor/annotations";
 import type { FontFamily } from "@/lib/pdf/operations/edits";
 import type { EditorTool } from "@/components/editor/editor-workspace";
+import { SignaturePad, type SignatureImage } from "@/components/editor/signature-pad";
 
 type Props = {
   tool: EditorTool;
@@ -33,6 +34,7 @@ type Props = {
   textStyle: TextStyle;
   onTextStyle: (patch: Partial<TextStyle>) => void;
   onChooseImage: () => void;
+  onPlaceSignature: (signature: SignatureImage) => void;
   imageError: string | null;
   shapeStyle: ShapeStyle;
   onShapeStyle: (patch: Partial<ShapeStyle>) => void;
@@ -427,6 +429,17 @@ export function PropertiesPanel(props: Props) {
           </p>
           <p className="text-xs text-subtle">The blue box only shows in the editor; in the saved PDF the area is invisible but clickable.</p>
           <Shortcuts />
+        </>
+      );
+    case "sign":
+      return (
+        <>
+          <SignaturePad onPlace={props.onPlaceSignature} onUpload={props.onChooseImage} />
+          {props.imageError && (
+            <p role="alert" className="rounded-[10px] border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger">
+              {props.imageError}
+            </p>
+          )}
         </>
       );
     case "image":
