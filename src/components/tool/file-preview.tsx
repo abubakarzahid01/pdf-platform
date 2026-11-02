@@ -21,7 +21,7 @@ export function FilePreview({ item, showsFirstOf }: { item: CheckedItem; showsFi
       ) : item.file.type.startsWith("image/") ? (
         <ImagePreview file={item.file} />
       ) : (
-        <p className="text-sm text-muted">A preview of Office files will be available once conversion is built.</p>
+        <p className="text-sm text-muted">Office files are previewed after converting.</p>
       )}
     </div>
   );

@@ -6,7 +6,8 @@ import { Loader2 } from "lucide-react";
 import { limits } from "@/config/site";
 import type { InputSpec } from "@/config/tools";
 import { checkFile } from "@/lib/files/check-file";
-import { setPendingDocument, setPendingFiles } from "@/lib/files/pending-document";
+import { useReleaseWhenHidden } from "@/lib/react/use-release-when-hidden";
+import { setPendingDocument, setPendingFiles, takeFilesForTool } from "@/lib/files/pending-document";
 import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { OperationError, baseName, type OutputFile } from "@/lib/pdf/operations/types";
 import { minimumFiles, runTool, runnableTools, uploadingTools } from "@/lib/tools/run-tool";
@@ -51,12 +52,22 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
     itemsRef.current = items;
   }, [items]);
 
-  // Free the opened PDFs when leaving the page.
-  useEffect(() => {
-    return () => itemsRef.current.forEach((item) => closePdf(item.pdf));
-  }, []);
+  // Free the opened PDFs a while after leaving the page; coming back sooner finds it as it was.
+  useReleaseWhenHidden(() => {
+    itemsRef.current.forEach(discard);
+    setItems([]);
+    setPagePlan(null);
+    invalidate();
+  });
 
   // Any change to files or options makes an earlier result out of date.
+  // Files dropped on the homepage for this tool.
+  useEffect(() => {
+    const handed = takeFilesForTool(slug);
+    if (handed) addFiles(handed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, on arrival
+  }, []);
+
   function invalidate() {
     setOutputs(null);
     setRunError(null);
@@ -74,7 +85,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
     setItems((prev) => (input.multiple ? [...prev, ...added] : added));
 
     for (const item of added) {
-      checkFile(item.file, input.kinds, input.expected).then((result) => {
+      checkFile(item.file, input.kinds, input.expected, input.extensions).then((result) => {
         if (removedIds.current.has(item.id)) {
           if (result.ok) closePdf(result.pdf);
           return;

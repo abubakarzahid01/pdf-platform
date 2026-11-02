@@ -16,13 +16,13 @@ describe("checkUpload", () => {
   });
 
   it("refuses wrong types, renamed files and empty files", () => {
-    expect(checkUpload(file("word-report.docx"), "report.docx", "excel")).toMatch(/XLS, XLSX, ODS/);
+    expect(checkUpload(file("word-report.docx"), "report.docx", "excel")).toMatch(/Use an XLS, XLSX or ODS file/);
     expect(checkUpload(file("sample-3-pages.pdf"), "fake.docx", "word")).toMatch(/don't match/);
     // A ZIP that isn't an Office document, renamed to .docx.
     const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, ...new TextEncoder().encode("photos/holiday.jpg")]);
     expect(checkUpload(zip, "fake.docx", "word")).toMatch(/isn't a valid Office document/);
     expect(checkUpload(new Uint8Array(), "empty.docx", "word")).toMatch(/empty/);
-    expect(checkUpload(file("word-report.docx"), "no-extension", "word")).toMatch(/Use a/);
+    expect(checkUpload(file("word-report.docx"), "no-extension", "word")).toMatch(/Use a DOC, DOCX/);
   });
 });
 

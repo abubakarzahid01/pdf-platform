@@ -13,9 +13,9 @@ export const TIMEOUT_MS = 120_000;
 
 // What each tool accepts: file extensions, and the container types their bytes may have.
 export const KINDS = {
-  word: { extensions: ["doc", "docx", "odt", "rtf", "txt"], containers: ["zip", "ole", "rtf", "text"] },
-  excel: { extensions: ["xls", "xlsx", "ods"], containers: ["zip", "ole"] },
-  powerpoint: { extensions: ["ppt", "pptx", "odp"], containers: ["zip", "ole"] },
+  word: { extensions: ["doc", "docx", "odt", "rtf", "txt"], containers: ["zip", "ole", "rtf", "text"], label: "a DOC, DOCX, ODT, RTF or TXT file" },
+  excel: { extensions: ["xls", "xlsx", "ods"], containers: ["zip", "ole"], label: "an XLS, XLSX or ODS file" },
+  powerpoint: { extensions: ["ppt", "pptx", "odp"], containers: ["zip", "ole"], label: "a PPT, PPTX or ODP file" },
 };
 
 function container(bytes) {
@@ -36,7 +36,7 @@ export function checkUpload(bytes, fileName, kind) {
   if (bytes.length === 0) return "This file is empty.";
   if (bytes.length > MAX_BYTES) return `Files can be up to ${MAX_BYTES / 1024 / 1024} MB.`;
   const ext = /\.([a-z0-9]+)$/i.exec(fileName ?? "")?.[1]?.toLowerCase();
-  if (!ext || !spec.extensions.includes(ext)) return `Use a ${spec.extensions.map((e) => e.toUpperCase()).join(", ")} file.`;
+  if (!ext || !spec.extensions.includes(ext)) return `This tool doesn't take this type of file. Use ${spec.label}.`;
   const found = container(bytes);
   if (!spec.containers.includes(found)) return "This file's contents don't match its type. It may be damaged or renamed.";
   // ZIP-based documents name their format inside; a random ZIP renamed to .docx is refused.

@@ -217,6 +217,8 @@ function ResultPreview({ output }: { output: OutputFile }) {
     return () => {
       cancelled = true;
       closePdf(pdf);
+      // Shown again (after navigating back), the effect opens the result afresh.
+      setVerified({ state: "checking" });
     };
   }, [output]);
 

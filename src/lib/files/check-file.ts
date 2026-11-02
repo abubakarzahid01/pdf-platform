@@ -39,7 +39,7 @@ function fail(code: CheckErrorCode, message: string): CheckResult {
  * On success with a PDF, the opened document is returned; the caller must pass it
  * to `closePdf()` when finished with it.
  */
-export async function checkFile(file: File, allowed: FileKind[], expectedLabel: string): Promise<CheckResult> {
+export async function checkFile(file: File, allowed: FileKind[], expectedLabel: string, extensions?: string[]): Promise<CheckResult> {
   const maxBytes = limits.free.maxFileSizeMb * 1024 * 1024;
   if (file.size === 0) return fail("empty", "This file is empty.");
   if (file.size > maxBytes) {
@@ -56,6 +56,11 @@ export async function checkFile(file: File, allowed: FileKind[], expectedLabel: 
         : `This file isn't ${expectedLabel}, or its type couldn't be recognised.`,
     );
   }
+
+  // Word, Excel and PowerPoint files look alike inside, so the extension tells them apart; this
+  // stops a file being uploaded to a converter that would refuse it.
+  const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
+  if (extensions && !(ext && extensions.includes(ext))) return fail("wrong-type", `This file isn't ${expectedLabel}.`);
 
   if (kind !== "pdf") return { ok: true, kind };
   return openPdf(file);

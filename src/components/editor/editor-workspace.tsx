@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Eraser,
   FolderOpen,
   Highlighter,
   ImagePlus,
@@ -60,6 +59,7 @@ import { OperationError } from "@/lib/pdf/operations/types";
 import { downloadBytes } from "@/lib/files/download";
 import { prepareImage, type PreparedImage } from "@/lib/files/prepare-image";
 import type { SignatureImage } from "@/components/editor/signature-pad";
+import { KEEP_HIDDEN_MS, useReleaseWhenHidden } from "@/lib/react/use-release-when-hidden";
 
 const workingTools = new Set<EditorTool>(["select", "edit-text", "add-text", "image", "sign", "shape", "link", "highlight", "draw", "comment"]);
 
@@ -105,8 +105,9 @@ const FIT_PADDING = 48;
 const iconButton =
   "flex size-9 items-center justify-center rounded-[9px] border border-line bg-surface text-ink-soft hover:bg-surface-soft disabled:opacity-40";
 
-// Documents scheduled to close. Closing is delayed so React's development
-// double-mount check doesn't close a document that is still in use.
+// Documents scheduled to close. Closing is delayed so a page the user comes back to (Next.js keeps
+// visited pages hidden, see useReleaseWhenHidden) or React's development double-mount check
+// doesn't lose a document that is still in use.
 const closeTimers = new Map<PDFDocumentProxy, number>();
 
 export function EditorWorkspace() {
@@ -118,7 +119,14 @@ export function EditorWorkspace() {
     window.clearTimeout(closeTimers.get(doc.pdf));
     closeTimers.delete(doc.pdf);
     return () => {
-      closeTimers.set(doc.pdf, window.setTimeout(() => closePdf(doc.pdf), 1000));
+      closeTimers.set(
+        doc.pdf,
+        window.setTimeout(() => {
+          closeTimers.delete(doc.pdf);
+          closePdf(doc.pdf);
+          setDoc((current) => (current === doc ? null : current));
+        }, KEEP_HIDDEN_MS),
+      );
     };
   }, [doc]);
 
@@ -157,10 +165,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   // Local preview URLs for images; released when the editor closes (undo may still need them before).
   const imageUrls = useRef<string[]>([]);
 
-  useEffect(() => {
-    const urls = imageUrls.current;
-    return () => urls.forEach((u) => URL.revokeObjectURL(u));
-  }, []);
+  useReleaseWhenHidden(() => imageUrls.current.forEach((u) => URL.revokeObjectURL(u)));
 
   const annotations = history.present;
   const selected = annotations.find((a) => a.id === selectedId) ?? null;
@@ -612,11 +617,6 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             })}
           </div>
         ))}
-        <span className="mx-1.5 h-8 w-px bg-line" />
-        <button type="button" disabled className="flex min-w-14 flex-col items-center gap-[3px] rounded-[10px] px-2 py-1.5 text-[11px] font-medium text-ink-soft opacity-40">
-          <Eraser className="size-5" strokeWidth={1.75} aria-hidden="true" />
-          Erase
-        </button>
       </div>
 
       <div className="flex min-h-0 flex-1">

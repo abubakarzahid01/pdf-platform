@@ -16,7 +16,6 @@ const columns = [
     links: [
       { href: "/tools/invoice-to-excel", label: "Invoice to Excel" },
       { href: "/tools/pdf-to-excel", label: "PDF to Excel" },
-      { href: "#", label: "Help centre" },
     ],
   },
   {

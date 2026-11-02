@@ -38,3 +38,18 @@ export function peekPendingFiles() {
 export function clearPendingFiles(files: File[]) {
   if (pendingFiles === files) pendingFiles = [];
 }
+
+// Files dropped on the homepage, handed to the tool page the user picks.
+let filesForTool: { slug: string; files: File[] } | null = null;
+
+export function setFilesForTool(slug: string, files: File[]) {
+  filesForTool = { slug, files };
+}
+
+/** Returns the files once (then forgets them), or null if none were handed to this tool. */
+export function takeFilesForTool(slug: string) {
+  if (filesForTool?.slug !== slug) return null;
+  const { files } = filesForTool;
+  filesForTool = null;
+  return files;
+}

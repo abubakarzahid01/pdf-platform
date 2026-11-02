@@ -66,7 +66,7 @@ const allTools: Tool[] = [
   { slug: "compress-pdf", name: "Compress PDF", description: "Reduce file size while keeping quality.", category: "organise", icon: Minimize2, tone: "info", popular: true },
   { slug: "organise-pages", name: "Organise pages", description: "Reorder, rotate and delete pages.", category: "organise", icon: LayoutGrid, tone: "info", popular: true },
   { slug: "rotate-pdf", name: "Rotate PDF", description: "Rotate some or all pages.", category: "organise", icon: RotateCw, tone: "info" },
-  { slug: "crop-pdf", name: "Crop PDF", description: "Trim margins or select a page area.", category: "organise", icon: Crop, tone: "info" },
+  { slug: "crop-pdf", name: "Crop PDF", description: "Trim white margins or a set amount from each edge.", category: "organise", icon: Crop, tone: "info" },
   { slug: "add-page-numbers", name: "Add page numbers", description: "Number pages with your chosen position and style.", category: "organise", icon: Hash, tone: "info" },
   { slug: "add-watermark", name: "Add watermark", description: "Stamp text such as CONFIDENTIAL across every page.", category: "organise", icon: Stamp, tone: "info" },
 
@@ -108,13 +108,15 @@ export type InputSpec = {
   kinds: FileKind[];
   // Used in error messages: "This file isn't <expected>".
   expected: string;
+  // Office files share container types, so these also need the right extension.
+  extensions?: string[];
   multiple: boolean;
 };
 
 const inputSpecs: Record<string, Omit<InputSpec, "multiple">> = {
-  "word-to-pdf": { accept: ".doc,.docx,.odt,.rtf,.txt", label: "DOC, DOCX, ODT, RTF or TXT", kinds: ["zip", "ole", "rtf", "text"], expected: "a Word document" },
-  "excel-to-pdf": { accept: ".xls,.xlsx,.ods", label: "XLS, XLSX or ODS", kinds: ["zip", "ole"], expected: "an Excel workbook" },
-  "powerpoint-to-pdf": { accept: ".ppt,.pptx,.odp", label: "PPT, PPTX or ODP", kinds: ["zip", "ole"], expected: "a PowerPoint presentation" },
+  "word-to-pdf": { accept: ".doc,.docx,.odt,.rtf,.txt", label: "DOC, DOCX, ODT, RTF or TXT", kinds: ["zip", "ole", "rtf", "text"], expected: "a Word document", extensions: ["doc", "docx", "odt", "rtf", "txt"] },
+  "excel-to-pdf": { accept: ".xls,.xlsx,.ods", label: "XLS, XLSX or ODS", kinds: ["zip", "ole"], expected: "an Excel workbook", extensions: ["xls", "xlsx", "ods"] },
+  "powerpoint-to-pdf": { accept: ".ppt,.pptx,.odp", label: "PPT, PPTX or ODP", kinds: ["zip", "ole"], expected: "a PowerPoint presentation", extensions: ["ppt", "pptx", "odp"] },
   "images-to-pdf": { accept: ".jpg,.jpeg,.png,.webp,.gif,.bmp", label: "JPG, PNG, WEBP, GIF or BMP", kinds: ["png", "jpeg", "gif", "webp", "bmp"], expected: "an image" },
 };
 

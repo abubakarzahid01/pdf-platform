@@ -10,6 +10,7 @@ import { checkFile } from "@/lib/files/check-file";
 import { downloadBytes } from "@/lib/files/download";
 import { clearPendingFiles, peekPendingFiles } from "@/lib/files/pending-document";
 import { closePdf, loadPdfJs, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
+import { useReleaseWhenHidden } from "@/lib/react/use-release-when-hidden";
 import { readTextItems } from "@/lib/pdf/text-items";
 import { addOcrInBrowser } from "@/lib/ocr/ocr-browser";
 import { extractInvoice } from "@/lib/extraction/invoice";
@@ -71,8 +72,14 @@ export function ExtractionWorkspace() {
     docsRef.current = docs;
   }, [docs]);
 
-  // Free the opened PDFs when leaving the page.
-  useEffect(() => () => docsRef.current.forEach((d) => closePdf(d.pdf)), []);
+  // Free the opened PDFs a while after leaving the page; coming back sooner finds it as it was.
+  useReleaseWhenHidden(() => {
+    docsRef.current.forEach((d) => closePdf(d.pdf));
+    setDocs([]);
+    setRows([]);
+    setSelectedId(null);
+    setNotice(null);
+  });
 
   async function addFiles(files: File[]) {
     setNotice(null);

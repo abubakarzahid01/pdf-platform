@@ -17,6 +17,9 @@ export function PdfPageCanvas({ pdf, pageNumber, width, className }: Props) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    // A page shown again after navigating back can briefly hold a document its owner has already
+    // closed and is about to replace; there's nothing to draw from it.
+    if (pdf.loadingTask.destroyed) return;
     let cancelled = false;
     let renderTask: { cancel: () => void; promise: Promise<void> } | null = null;
 

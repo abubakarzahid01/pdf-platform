@@ -25,10 +25,7 @@ export function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="#" className="hidden px-3.5 py-2.5 text-[15px] font-medium text-ink sm:block">
-            Log in
-          </Link>
-          <Link href="#" className="rounded-[10px] bg-ink px-[18px] py-2.5 text-[15px] font-semibold text-white hover:bg-ink-soft">
+          <Link href="/#tools" className="rounded-[10px] bg-ink px-[18px] py-2.5 text-[15px] font-semibold text-white hover:bg-ink-soft">
             Get started
           </Link>
 
@@ -49,9 +46,6 @@ export function SiteHeader() {
                   {l.label}
                 </Link>
               ))}
-              <Link href="#" className="rounded-lg px-3 py-3 text-[15px] font-medium text-ink hover:bg-surface-soft sm:hidden">
-                Log in
-              </Link>
             </nav>
           </details>
         </div>
