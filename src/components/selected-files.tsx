@@ -44,7 +44,7 @@ export function SelectedFiles({ files, statuses, onRemove, onMove }: Props) {
               {extension(f.name)}
             </span>
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium text-ink">{f.name}</span>
+              <span className="line-clamp-2 text-sm font-medium text-ink wrap-anywhere">{f.name}</span>
               <span className={`text-xs ${isError ? "text-danger" : "text-subtle"}`}>
                 {status?.state === "error"
                   ? status.message

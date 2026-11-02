@@ -38,10 +38,10 @@ export function SiteFooter() {
             <span className="text-sm text-subtle">Online PDF tools for editing, converting and extracting data.</span>
           </div>
           {columns.map((col) => (
-            <div key={col.title} className="flex flex-col gap-2.5 text-sm">
-              <strong className="text-[13px] text-ink">{col.title}</strong>
+            <div key={col.title} className="flex flex-col items-start gap-0.5 text-sm">
+              <strong className="mb-1.5 text-[13px] text-ink">{col.title}</strong>
               {col.links.map((l) => (
-                <Link key={l.label} href={l.href} className="text-muted hover:text-ink">
+                <Link key={l.label} href={l.href} className="py-1 text-muted hover:text-ink">
                   {l.label}
                 </Link>
               ))}

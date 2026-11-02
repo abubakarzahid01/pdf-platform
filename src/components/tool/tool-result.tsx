@@ -82,7 +82,7 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
         <ul className="flex flex-col gap-2">
           {outputs.map((o) => (
             <li key={o.name} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-2.5">
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{o.name}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 text-sm font-medium wrap-anywhere">{o.name}</span>
               <span className="shrink-0 text-xs text-subtle">
                 {o.mime ? "" : `${o.pageCount} page${o.pageCount > 1 ? "s" : ""} · `}
                 {formatSize(o.bytes.length)}
@@ -101,10 +101,10 @@ export function ToolResult({ outputs, zipName, onBack, onReset }: Props) {
       )}
 
       <div className="flex flex-wrap gap-4 text-sm font-semibold">
-        <button type="button" onClick={onBack} className="text-brand-strong hover:text-brand">
+        <button type="button" onClick={onBack} className="py-1 text-brand-strong hover:text-brand">
           ← Change options
         </button>
-        <button type="button" onClick={onReset} className="text-subtle hover:text-ink">
+        <button type="button" onClick={onReset} className="py-1 text-subtle hover:text-ink">
           Start over with new files
         </button>
       </div>

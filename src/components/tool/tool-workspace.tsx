@@ -199,7 +199,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
             />
             <div className="flex flex-wrap gap-4">
               {input.multiple && (
-                <label className="cursor-pointer text-sm font-semibold text-brand-strong hover:text-brand">
+                <label className="cursor-pointer py-1 text-sm font-semibold text-brand-strong hover:text-brand">
                   + Add more files
                   <input
                     type="file"
@@ -213,7 +213,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
                   />
                 </label>
               )}
-              <button type="button" onClick={reset} className="text-sm font-semibold text-subtle hover:text-ink">
+              <button type="button" onClick={reset} className="py-1 text-sm font-semibold text-subtle hover:text-ink">
                 Start over
               </button>
             </div>
@@ -241,7 +241,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
         )}
       </section>
 
-      <aside className="flex w-full max-w-[400px] flex-[1_1_340px] flex-col gap-5 rounded-panel border border-line bg-surface p-6 shadow-[0_12px_32px_rgb(21_19_43/0.06)]">
+      <aside className="flex w-full flex-[1_1_340px] lg:max-w-[400px] flex-col gap-5 rounded-panel border border-line bg-surface p-6 shadow-[0_12px_32px_rgb(21_19_43/0.06)]">
         <div className="flex items-center justify-between">
           <strong className="font-display text-[17px]">Options</strong>
           {!opensWorkspace && !runnable && <PrototypeBadge />}

@@ -163,7 +163,7 @@ export function SignaturePad({ onPlace, onUpload }: { onPlace: (signature: Signa
           />
           <div className="flex justify-between text-xs text-subtle">
             <span>Sign above</span>
-            <button type="button" onClick={clear} disabled={!hasInk} className="font-semibold text-brand-strong hover:text-brand disabled:opacity-40">
+            <button type="button" onClick={clear} disabled={!hasInk} className="-my-1 px-1 py-1 font-semibold text-brand-strong hover:text-brand disabled:opacity-40">
               Clear
             </button>
           </div>

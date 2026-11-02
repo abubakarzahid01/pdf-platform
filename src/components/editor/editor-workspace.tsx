@@ -20,8 +20,10 @@ import {
   Redo2,
   Shapes,
   Signature,
+  SlidersHorizontal,
   Type,
   Undo2,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { clearPendingDocument, peekPendingDocument, type OpenDocument } from "@/lib/files/pending-document";
@@ -136,6 +138,8 @@ export function EditorWorkspace() {
 
 function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const [tool, setTool] = useState<EditorTool>("select");
+  // Below the lg breakpoint the properties panel is a sheet over the bottom of the page.
+  const [panelOpen, setPanelOpen] = useState(false);
   const [sizes, setSizes] = useState<PageSize[] | null>(null);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState<"fit" | number>("fit");
@@ -604,6 +608,8 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                     if (editingId) finishEditing(null);
                     if (t.id !== "select") setSelectedId(null);
                     if (t.id === "edit-text") loadTextLines();
+                    // Signing starts in the panel (draw or type a signature).
+                    if (t.id === "sign") setPanelOpen(true);
                     setTool(t.id);
                   }}
                   className={`flex min-w-14 flex-col items-center gap-[3px] rounded-[10px] px-2 py-1.5 text-[11px] font-medium ${
@@ -706,13 +712,32 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             >
               Fit width
             </button>
+            <button
+              type="button"
+              aria-expanded={panelOpen}
+              onClick={() => setPanelOpen((open) => !open)}
+              className={`inline-flex items-center gap-1.5 rounded-[9px] border px-3 py-2 font-medium lg:hidden ${
+                panelOpen || selected ? "border-brand-ring bg-brand-soft text-brand-strong" : "border-line bg-surface text-ink hover:bg-surface-soft"
+              }`}
+            >
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
+              {selected ? "Edit selected" : "Options"}
+            </button>
           </div>
         </main>
 
-        <aside aria-label="Properties" className="hidden w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-l border-line bg-surface p-5 lg:flex">
-          <div className="flex items-center justify-between">
+        <aside
+          aria-label="Properties"
+          className={`${
+            panelOpen ? "fixed inset-x-0 bottom-0 z-30 flex max-h-[60dvh] rounded-t-2xl border-t shadow-raised" : "hidden"
+          } shrink-0 flex-col gap-5 overflow-y-auto border-line bg-surface p-5 lg:static lg:flex lg:max-h-none lg:w-[300px] lg:rounded-none lg:border-t-0 lg:border-l lg:shadow-none`}
+        >
+          <div className="flex items-center justify-between gap-3">
             <strong className="text-[15px]">{toolGroups.flat().find((t) => t.id === tool)?.label}</strong>
             {!workingTools.has(tool) && <PrototypeBadge label="Not functional yet" />}
+            <button type="button" aria-label="Close options" onClick={() => setPanelOpen(false)} className={`${iconButton} ml-auto lg:hidden`}>
+              <X className="size-4" />
+            </button>
           </div>
           <PropertiesPanel
             tool={tool}
@@ -728,7 +753,11 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             textStyle={textStyle}
             onTextStyle={changeTextStyle}
             onChooseImage={() => requestImage(pageRef.current - 1)}
-            onPlaceSignature={placeSignature}
+            onPlaceSignature={(signature) => {
+              placeSignature(signature);
+              // On small screens, show the page so the signature can be moved into place.
+              setPanelOpen(false);
+            }}
             imageError={imageError}
             shapeStyle={shapeStyle}
             onShapeStyle={changeShapeStyle}
