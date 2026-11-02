@@ -28,7 +28,13 @@ export const runnableTools = new Set([
   "add-watermark",
   "crop-pdf",
   "protect-pdf",
+  "word-to-pdf",
+  "excel-to-pdf",
+  "powerpoint-to-pdf",
 ]);
+
+// Tools that send the file to our conversion service instead of working in the browser.
+export const uploadingTools = new Set(["word-to-pdf", "excel-to-pdf", "powerpoint-to-pdf"]);
 
 // Minimum number of valid files each tool needs.
 export function minimumFiles(slug: string) {
@@ -100,6 +106,13 @@ export async function runTool(slug: string, inputs: InputPdf[], options: Record<
       const { browserQpdf, browserProtectedCheck } = await import("@/lib/pdf/qpdf-browser");
       const password = String(options.password ?? "");
       return [await protectPdf(inputs[0], password, String(options.repeat ?? ""), browserQpdf, browserProtectedCheck, Number(options.pageCount))];
+    }
+    case "word-to-pdf":
+    case "excel-to-pdf":
+    case "powerpoint-to-pdf": {
+      const { convertOffice } = await import("@/lib/office/convert-office");
+      const kind = slug === "word-to-pdf" ? "word" : slug === "excel-to-pdf" ? "excel" : "powerpoint";
+      return [await convertOffice(inputs[0], kind, { fitSheets: Boolean(options.fitSheets) })];
     }
     case "compress-pdf": {
       // Loaded on demand: only the Compress tool needs the image recoder.

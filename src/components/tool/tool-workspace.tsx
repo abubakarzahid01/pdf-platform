@@ -9,7 +9,7 @@ import { checkFile } from "@/lib/files/check-file";
 import { setPendingDocument, setPendingFiles } from "@/lib/files/pending-document";
 import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { OperationError, baseName, type OutputFile } from "@/lib/pdf/operations/types";
-import { minimumFiles, runTool, runnableTools } from "@/lib/tools/run-tool";
+import { minimumFiles, runTool, runnableTools, uploadingTools } from "@/lib/tools/run-tool";
 import { FileDropzone } from "@/components/file-dropzone";
 import { PrototypeBadge } from "@/components/prototype-badge";
 import { SelectedFiles, type FileItemStatus } from "@/components/selected-files";
@@ -165,7 +165,7 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   if (checking) note = "Checking your files…";
   else if (errors > 0) note = `Remove the ${errors === 1 ? "file" : `${errors} files`} with problems to continue.`;
   else if (hasFiles && (opensWorkspace || runnable) && !enoughFiles) note = `Add at least ${minimumFiles(slug)} ${slug === "images-to-pdf" ? "images" : "PDFs"}.`;
-  else if (canAct) note = "Your files stay in your browser. Nothing is uploaded.";
+  else if (canAct) note = uploadingTools.has(slug) ? "Your file is sent to our conversion server and deleted straight after." : "Your files stay in your browser. Nothing is uploaded.";
   else if (hasFiles && !runnable && !opensWorkspace) note = "Files checked. Processing for this tool arrives in a later phase.";
 
   return (

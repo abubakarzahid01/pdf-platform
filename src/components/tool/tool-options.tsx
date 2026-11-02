@@ -6,7 +6,7 @@ export type OptionValues = Record<string, string | boolean>;
 
 // Starting values for each tool's options.
 export const optionDefaults: Record<string, OptionValues> = {
-  "excel-to-pdf": { "sheet-Summary": true, "sheet-Monthly": true, "sheet-Forecast": false, orientation: "Landscape", paper: "A4", margins: "Normal", scaling: "Fit width", printAreas: true },
+  "excel-to-pdf": { fitSheets: false },
   "compress-pdf": { level: "Recommended" },
   "split-pdf": { mode: "ranges", pages: "" },
   "rotate-pdf": { angle: "90", which: "all" },
@@ -39,22 +39,26 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
     case "excel-to-pdf":
       return (
         <>
-          <Field label="Worksheets (sample)">
-            {["Summary", "Monthly", "Forecast"].map((s) => (
-              <Checkbox key={s} label={s} checked={bool(`sheet-${s}`)} onChange={set(`sheet-${s}`)} />
-            ))}
-          </Field>
-          <Field label="Orientation">
-            <Segmented options={["Portrait", "Landscape"]} value={text("orientation")} onChange={set("orientation")} />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <SelectField label="Paper size" options={["A4", "Letter", "Legal"]} value={text("paper")} onChange={set("paper")} />
-            <SelectField label="Margins" options={["Normal", "Narrow", "Wide"]} value={text("margins")} onChange={set("margins")} />
-          </div>
-          <Field label="Scaling">
-            <Segmented options={["Actual size", "Fit width", "Fit page"]} value={text("scaling")} onChange={set("scaling")} />
-          </Field>
-          <Checkbox label="Respect print areas and page breaks" checked={bool("printAreas")} onChange={set("printAreas")} />
+          <Checkbox label="Fit each sheet on one page" checked={bool("fitSheets")} onChange={set("fitSheets")} />
+          <p className="text-[13px] text-subtle">
+            Every sheet is included. Without this option, each sheet uses its own page setup from Excel (paper size, orientation,
+            print areas and page breaks), so wide sheets can run onto extra pages.
+          </p>
+          <p className="text-[13px] text-subtle">
+            Converted with LibreOffice on our conversion server: your file is uploaded, converted and deleted straight away. It
+            isn&apos;t stored or shared. Fonts that aren&apos;t available are replaced with close matches.
+          </p>
+        </>
+      );
+    case "word-to-pdf":
+    case "powerpoint-to-pdf":
+      return (
+        <>
+          <p className="text-sm text-muted">{slug === "word-to-pdf" ? "Pages, headers, tables and images are kept as laid out in the document." : "Each slide becomes one page."}</p>
+          <p className="text-[13px] text-subtle">
+            Converted with LibreOffice on our conversion server: your file is uploaded, converted and deleted straight away. It
+            isn&apos;t stored or shared. Fonts that aren&apos;t available are replaced with close matches.
+          </p>
         </>
       );
     case "compress-pdf":

@@ -16,7 +16,7 @@ export default function Home() {
         <section className="border-b border-line-soft bg-surface-soft pb-[72px] pt-16 sm:pt-20">
           <div className={`${container} flex flex-col items-center gap-5 text-center`}>
             <span className="rounded-full bg-brand-soft px-3 py-1.5 text-[13px] font-semibold text-brand-strong">
-              Free · Your files stay in your browser
+              Free · Most tools work right in your browser
             </span>
             <h1 className="max-w-[860px] font-display text-[38px] font-extrabold leading-[1.06] tracking-[-0.035em] sm:text-[60px]">
               {site.tagline}

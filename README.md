@@ -19,17 +19,26 @@ npm run dev      # start at http://localhost:3000
 npm run lint     # check code for mistakes
 npm test         # run automated tests on real PDF outputs
 npm run build    # production build (run before committing larger changes)
+npm run converter  # Word/Excel/PowerPoint to PDF service on http://localhost:4000
 ```
+
+Word, Excel and PowerPoint to PDF need [LibreOffice](https://www.libreoffice.org/download/download-libreoffice/)
+(free) installed on the same computer as `npm run converter`. Run it alongside `npm run dev`.
+For the live site, the converter runs on its own server and the website is told where with
+`NEXT_PUBLIC_CONVERTER_URL`; the server sets `ALLOWED_ORIGIN` to the website's address.
 
 ## Architecture
 
 1. **Website (browser)** — Next.js + React + TypeScript + Tailwind CSS. Every working tool
    runs in the user's browser, so files never leave their computer and hosting stays cheap:
    viewing, editing, merging, splitting, rotating, reordering, compressing, extraction and OCR.
-2. **Conversion server (only if needed)** — Office → PDF needs LibreOffice, which a browser
-   can't run. It would need a small server, which costs money, so it's held back until there is demand.
+2. **Conversion server** (`converter/`) — Office → PDF needs LibreOffice, which a browser can't run.
+   A small Node service with no dependencies: it converts one file at a time per worker in a
+   temporary folder that is deleted straight after, and only accepts requests from the website.
+   These are the only tools that upload a file, and their pages say so. Hosting: a free Oracle
+   Cloud server or a small VPS (to be decided at launch).
 
-No accounts or file storage: nothing is uploaded, so there is nothing to store.
+No accounts or file storage: nothing is kept.
 
 The PDF text-editing engine will sit behind its own interface so it can be replaced
 (for example by a commercial SDK) without rewriting the editor.
@@ -116,8 +125,8 @@ SDK (Apryse, Nutrient, MuPDF commercial) once revenue justifies it.
 1. ✅ Remove AI and pricing items from the site (Stage 1)
 2. ✅ Free browser tools: images to PDF, PDF to images, page numbers, watermark, crop, signature
 3. ✅ Protect PDF (qpdf in the browser, AES-256)
-4. **Office conversions: hidden at launch unless a free option is found; PDF to Word only if quality is good enough** ← next
-5. Full testing and mobile layout, plus a third-party licences page (Apache-2.0 notices for PDF.js, Tesseract and qpdf)
+4. **Office conversions** ← in progress: Word/Excel/PowerPoint to PDF via the LibreOffice converter (`converter/`); PDF to Word in the browser next; PDF to PowerPoint hidden
+5. Full testing and mobile layout, a third-party licences page (Apache-2.0 notices for PDF.js, Tesseract and qpdf), and the homepage drop box (still placeholder text)
 6. Low-cost hosting (Cloudflare Pages free plan; domain is the only cost)
 7. Launch, watch real usage, improve from feedback
 

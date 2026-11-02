@@ -15,6 +15,9 @@ Generated files for checking uploads, validation and rendering. Not real documen
 | `scanned-page.pdf` | Only an image of grey bars that look like text lines, no real text | No editable text; OCR finds nothing and says so |
 | `invoice-scanned.pdf` | Screenshot of the Bluefield invoice as a page image (`invoice-scanned.png`), no text layer | OCR reads all six fields; low-certainty words marked unsure |
 | `images-heavy.pdf` | Two large photo-like images (JPEG and lossless) plus text | Compresses to a much smaller file; text unchanged |
+| `word-report.docx` | Made in Microsoft Word: headings, bullets, a table, a page break | Word to PDF: 2 pages, table and list kept |
+| `excel-budget.xlsx` | Two sheets, one 13 columns wide | Excel to PDF: every sheet; one page per sheet with "Fit each sheet on one page" |
+| `slides-deck.pptx` | Made in Microsoft PowerPoint: 3 slides | PowerPoint to PDF: 3 pages |
 | `too-many-pages-250.pdf` | Over the free page limit (200) | Rejected with a page-limit message |
 | `broken-truncated.pdf` | A real PDF cut off halfway | Rejected as damaged |
 | `fake-text-file.pdf` | A text file renamed to `.pdf` | Rejected as not a PDF |

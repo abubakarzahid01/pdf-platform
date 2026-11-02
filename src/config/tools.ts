@@ -43,6 +43,8 @@ export type Tool = {
   icon: LucideIcon;
   tone: ToolTone;
   popular?: boolean;
+  // Not offered yet: left out of every list, and its page shows "not found".
+  hidden?: boolean;
 };
 
 export const categories: { id: ToolCategory; label: string }[] = [
@@ -54,7 +56,7 @@ export const categories: { id: ToolCategory; label: string }[] = [
   { id: "security", label: "Security" },
 ];
 
-export const tools: Tool[] = [
+const allTools: Tool[] = [
   // Edit
   { slug: "edit-pdf", name: "Edit PDF", description: "Change text, add images, shapes and comments.", category: "edit", icon: FilePen, tone: "brand", popular: true },
 
@@ -70,14 +72,14 @@ export const tools: Tool[] = [
 
   // Convert to PDF
   { slug: "word-to-pdf", name: "Word to PDF", description: "DOC and DOCX to PDF with layout preserved.", category: "convert-to", icon: FileInput, tone: "neutral", popular: true },
-  { slug: "excel-to-pdf", name: "Excel to PDF", description: "Choose sheets, orientation and scaling.", category: "convert-to", icon: FileSpreadsheet, tone: "neutral", popular: true },
+  { slug: "excel-to-pdf", name: "Excel to PDF", description: "Spreadsheets to PDF, each sheet as laid out in Excel.", category: "convert-to", icon: FileSpreadsheet, tone: "neutral", popular: true },
   { slug: "powerpoint-to-pdf", name: "PowerPoint to PDF", description: "Slides, images and charts to PDF.", category: "convert-to", icon: Presentation, tone: "neutral", popular: true },
   { slug: "images-to-pdf", name: "Images to PDF", description: "JPG, PNG and more into one PDF.", category: "convert-to", icon: Images, tone: "neutral", popular: true },
 
   // Convert from PDF
   { slug: "pdf-to-word", name: "PDF to Word", description: "Turn PDFs into editable DOCX files.", category: "convert-from", icon: FileOutput, tone: "neutral", popular: true },
   { slug: "pdf-to-excel", name: "PDF to Excel", description: "Pull tables into XLSX spreadsheets.", category: "convert-from", icon: Table, tone: "neutral", popular: true },
-  { slug: "pdf-to-powerpoint", name: "PDF to PowerPoint", description: "Turn pages into presentation slides.", category: "convert-from", icon: Presentation, tone: "neutral" },
+  { slug: "pdf-to-powerpoint", name: "PDF to PowerPoint", description: "Turn pages into presentation slides.", category: "convert-from", icon: Presentation, tone: "neutral", hidden: true },
   { slug: "pdf-to-csv", name: "PDF to CSV", description: "Export tables as CSV files.", category: "convert-from", icon: FileType, tone: "neutral" },
   { slug: "pdf-to-images", name: "PDF to images", description: "Save pages as PNG or JPG.", category: "convert-from", icon: FileImage, tone: "neutral" },
   { slug: "pdf-to-text", name: "PDF to text", description: "Extract the readable text.", category: "convert-from", icon: FileText, tone: "neutral" },
@@ -88,6 +90,8 @@ export const tools: Tool[] = [
   // Security
   { slug: "protect-pdf", name: "Protect PDF", description: "Add a password to your document.", category: "security", icon: Lock, tone: "neutral" },
 ];
+
+export const tools = allTools.filter((t) => !t.hidden);
 
 export const popularTools = tools.filter((t) => t.popular);
 
