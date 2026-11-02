@@ -4,7 +4,8 @@ import type { TextItem } from "./text-items";
 export type Cell = { text: string; x: number; end: number };
 
 // `confidence` is the lowest OCR confidence on the line (absent for real PDF text).
-export type LayoutLine = { y: number; size: number; cells: Cell[]; confidence?: number };
+// `items` are the line's own pieces, left to right, for callers that need their styles.
+export type LayoutLine = { y: number; size: number; cells: Cell[]; confidence?: number; items: TextItem[] };
 
 // Bullet characters that Word and others draw with the Symbol/Wingdings fonts (private-use codes).
 const SYMBOL_BULLETS = /[]/g;
@@ -54,6 +55,6 @@ export function layoutLines(items: TextItem[]): LayoutLine[] {
     for (const c of cells) c.text = c.text.trim();
     const scores = group.flatMap((i) => (i.confidence === undefined ? [] : [i.confidence]));
     const confidence = scores.length ? Math.min(...scores) : undefined;
-    return { y: group[0].y, size: Math.max(...group.map((i) => i.size)), cells, ...(confidence === undefined ? {} : { confidence }) };
+    return { y: group[0].y, size: Math.max(...group.map((i) => i.size)), cells, items: group, ...(confidence === undefined ? {} : { confidence }) };
   });
 }

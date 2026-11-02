@@ -77,7 +77,7 @@ const allTools: Tool[] = [
   { slug: "images-to-pdf", name: "Images to PDF", description: "JPG, PNG and more into one PDF.", category: "convert-to", icon: Images, tone: "neutral", popular: true },
 
   // Convert from PDF
-  { slug: "pdf-to-word", name: "PDF to Word", description: "Turn PDFs into editable DOCX files.", category: "convert-from", icon: FileOutput, tone: "neutral", popular: true },
+  { slug: "pdf-to-word", name: "PDF to Word", description: "Turn text PDFs into editable Word documents.", category: "convert-from", icon: FileOutput, tone: "neutral", popular: true },
   { slug: "pdf-to-excel", name: "PDF to Excel", description: "Pull tables into XLSX spreadsheets.", category: "convert-from", icon: Table, tone: "neutral", popular: true },
   { slug: "pdf-to-powerpoint", name: "PDF to PowerPoint", description: "Turn pages into presentation slides.", category: "convert-from", icon: Presentation, tone: "neutral", hidden: true },
   { slug: "pdf-to-csv", name: "PDF to CSV", description: "Export tables as CSV files.", category: "convert-from", icon: FileType, tone: "neutral" },

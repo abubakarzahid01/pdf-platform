@@ -9,6 +9,8 @@ export type TextItem = {
   size: number; // font size on the page
   hasEOL: boolean;
   confidence?: number; // 0–100, only for text read by OCR
+  // The font as named in the PDF, e.g. "Calibri,Bold" (subset prefix removed), when known.
+  font?: string;
 };
 
 // `ocr`: true when the page had no text and its words were read from the image with OCR;

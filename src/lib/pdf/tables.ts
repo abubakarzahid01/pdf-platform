@@ -1,7 +1,8 @@
 import type { TextItem } from "./text-items";
 import { layoutLines, type LayoutLine } from "./text-layout";
 
-export type Table = { page: number; rows: string[][] };
+// `top` and `bottom` are the baselines of the first and last rows on the page.
+export type Table = { page: number; rows: string[][]; top: number; bottom: number };
 
 // Rows further apart than this (times the font size) belong to different tables.
 const MAX_ROW_GAP = 3;
@@ -17,7 +18,7 @@ export function detectTables(items: TextItem[], page: number): Table[] {
   let run: LayoutLine[] = [];
 
   const finish = () => {
-    if (run.length >= 2) tables.push({ page, rows: toRows(run) });
+    if (run.length >= 2) tables.push({ page, rows: toRows(run), top: run[0].y, bottom: run[run.length - 1].y });
     run = [];
   };
 

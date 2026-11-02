@@ -96,6 +96,8 @@ Every significant library must be safe for commercial, closed-source use.
 | Typed signatures | Dancing Script via @expo-google-fonts/dancing-script | OFL-1.1 (font), MIT (package) | ✅ drawn into the signature image; the font itself isn't embedded |
 | Automated tests | Vitest | MIT | ✅ installed (dev only) |
 | Excel / CSV export | Own small XLSX/CSV writer on fflate | MIT | ✅ PDF to Excel/CSV, invoice export (Phase 6) |
+| PDF to Word | docx (Word file writer) | MIT | ✅ structure rebuilt from text positions, in the browser |
+| Office → PDF (in use) | LibreOffice via `converter/` | MPL-2.0 (run as a separate program, unmodified) | ✅ Word, Excel, PowerPoint |
 | Office → PDF | LibreOffice (headless, server) | MPL-2.0 | Conversion phase |
 | OCR | tesseract.js 7 + tesseract.js-core; English data from @tesseract.js-data/eng | Apache-2.0 (engine), MIT (data package; Tesseract model Apache-2.0) | ✅ scanned pages, in the browser, served from /ocr (Phase 6) |
 | Compression | pdf-lib + browser canvas (image recompression) | MIT | ✅ in the browser (Phase 4) |
@@ -125,8 +127,8 @@ SDK (Apryse, Nutrient, MuPDF commercial) once revenue justifies it.
 1. ✅ Remove AI and pricing items from the site (Stage 1)
 2. ✅ Free browser tools: images to PDF, PDF to images, page numbers, watermark, crop, signature
 3. ✅ Protect PDF (qpdf in the browser, AES-256)
-4. **Office conversions** ← in progress: Word/Excel/PowerPoint to PDF via the LibreOffice converter (`converter/`); PDF to Word in the browser next; PDF to PowerPoint hidden
-5. Full testing and mobile layout, a third-party licences page (Apache-2.0 notices for PDF.js, Tesseract and qpdf), and the homepage drop box (still placeholder text)
+4. ✅ Office conversions: Word/Excel/PowerPoint to PDF via the LibreOffice converter (`converter/`); PDF to Word in the browser (text documents); PDF to PowerPoint hidden for now
+5. **Full testing and mobile layout,** ← next: a third-party licences page (Apache-2.0 notices for PDF.js, Tesseract and qpdf), and the homepage drop box (still placeholder text)
 6. Low-cost hosting (Cloudflare Pages free plan; domain is the only cost)
 7. Launch, watch real usage, improve from feedback
 

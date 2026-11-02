@@ -5,6 +5,7 @@ import { imagesToPdf, type ImagesToPdfOptions, type PdfReadyImage } from "@/lib/
 import { mergePdfs } from "@/lib/pdf/operations/merge";
 import { organizePdf, type PagePlan } from "@/lib/pdf/operations/organize";
 import { pdfToImages } from "@/lib/pdf/operations/pdf-to-images";
+import { pdfToWord } from "@/lib/pdf/operations/pdf-to-word";
 import { pdfToText, type PageBreaks } from "@/lib/pdf/operations/pdf-to-text";
 import { pdfToSpreadsheet, type TableLayout } from "@/lib/pdf/operations/pdf-to-spreadsheet";
 import { addPageNumbers, addWatermark, type NumberFormat, type NumberPosition, type WatermarkPosition } from "@/lib/pdf/operations/stamp";
@@ -31,6 +32,7 @@ export const runnableTools = new Set([
   "word-to-pdf",
   "excel-to-pdf",
   "powerpoint-to-pdf",
+  "pdf-to-word",
 ]);
 
 // Tools that send the file to our conversion service instead of working in the browser.
@@ -113,6 +115,10 @@ export async function runTool(slug: string, inputs: InputPdf[], options: Record<
       const { convertOffice } = await import("@/lib/office/convert-office");
       const kind = slug === "word-to-pdf" ? "word" : slug === "excel-to-pdf" ? "excel" : "powerpoint";
       return [await convertOffice(inputs[0], kind, { fitSheets: Boolean(options.fitSheets) })];
+    }
+    case "pdf-to-word": {
+      const { browserDocPageReader } = await import("@/lib/pdf/doc-pages-browser");
+      return [await pdfToWord(inputs[0], browserDocPageReader)];
     }
     case "compress-pdf": {
       // Loaded on demand: only the Compress tool needs the image recoder.

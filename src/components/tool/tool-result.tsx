@@ -116,6 +116,7 @@ function fileFormat(mime: string) {
   if (mime.startsWith("text/plain")) return { kind: "text file", label: "TXT" };
   if (mime.startsWith("text/csv")) return { kind: "CSV file", label: "CSV" };
   if (mime.includes("spreadsheetml")) return { kind: "Excel file", label: "Excel" };
+  if (mime.includes("wordprocessingml")) return { kind: "Word document", label: "Word" };
   if (mime === "image/png") return { kind: "image", label: "PNG" };
   if (mime === "image/jpeg") return { kind: "image", label: "JPG" };
   return { kind: "file", label: "file" };

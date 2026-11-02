@@ -50,6 +50,14 @@ export function ToolOptions({ slug, values, onChange, pageCount }: Props) {
           </p>
         </>
       );
+    case "pdf-to-word":
+      return (
+        <p className="text-[13px] text-subtle">
+          Makes an editable Word document in your browser. Paragraphs, headings, bold and italic, lists, simple tables and images
+          are kept. Exact positions, multi-column layouts and complex designs aren&apos;t, so it suits letters, reports and
+          contracts best. Scanned pages are read with text recognition (OCR).
+        </p>
+      );
     case "word-to-pdf":
     case "powerpoint-to-pdf":
       return (
