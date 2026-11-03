@@ -1,0 +1,31 @@
+{
+  "components": [
+    { "name": "PDF.js", "package": "pdfjs-dist", "licence": "Apache-2.0", "url": "https://mozilla.github.io/pdf.js/", "usedFor": "Showing PDF pages and reading their text" },
+    { "name": "pdf-lib", "package": "pdf-lib", "licence": "MIT", "url": "https://pdf-lib.js.org", "usedFor": "Creating and changing PDF files" },
+    { "name": "fontkit (pdf-lib fork)", "package": "@pdf-lib/fontkit", "licence": "MIT", "url": "https://github.com/Hopding/fontkit", "usedFor": "Embedding fonts in PDFs" },
+    { "name": "Tesseract.js", "package": "tesseract.js", "licence": "Apache-2.0", "url": "https://github.com/naptha/tesseract.js", "usedFor": "Reading text from scanned pages (OCR)" },
+    { "name": "Tesseract.js core", "package": "tesseract.js-core", "licence": "Apache-2.0", "url": "https://github.com/naptha/tesseract.js-core", "usedFor": "The OCR engine, compiled for the browser" },
+    { "name": "Tesseract English data", "package": "@tesseract.js-data/eng", "licence": "Apache-2.0", "url": "https://github.com/tesseract-ocr/tessdata_best", "usedFor": "English language model for OCR" },
+    { "name": "qpdf-wasm", "package": "@neslinesli93/qpdf-wasm", "licence": "ISC", "url": "https://github.com/neslinesli93/qpdf-wasm", "usedFor": "qpdf compiled for the browser" },
+    { "name": "docx", "package": "docx", "licence": "MIT", "url": "https://docx.js.org", "usedFor": "Writing Word documents" },
+    { "name": "fflate", "package": "fflate", "licence": "MIT", "url": "https://github.com/101arrowz/fflate", "usedFor": "Creating ZIP and Excel files" },
+    { "name": "Lucide", "package": "lucide-react", "licence": "ISC", "url": "https://lucide.dev", "usedFor": "Icons" },
+    { "name": "React", "package": "react", "licence": "MIT", "url": "https://react.dev", "usedFor": "User interface" },
+    { "name": "Next.js", "package": "next", "licence": "MIT", "url": "https://nextjs.org", "usedFor": "Website framework" },
+    { "name": "Inter", "package": "@expo-google-fonts/inter", "licence": "OFL-1.1", "url": "https://github.com/rsms/inter", "usedFor": "Website font, and text added to PDFs" },
+    { "name": "Dancing Script", "package": "@expo-google-fonts/dancing-script", "licence": "OFL-1.1", "url": "https://github.com/googlefonts/DancingScript", "usedFor": "Typed signatures" },
+    { "name": "Plus Jakarta Sans", "licence": "OFL-1.1", "url": "https://github.com/tokotype/PlusJakartaSans", "usedFor": "Headings", "files": ["plus-jakarta-sans-OFL.txt"] }
+  ],
+  "embedded": [
+    { "name": "qpdf", "licence": "Apache-2.0", "url": "https://qpdf.sourceforge.io", "inside": "qpdf-wasm", "files": ["qpdf-NOTICE.md"] },
+    { "name": "libjpeg-turbo", "licence": "IJG, BSD-3-Clause and Zlib", "url": "https://libjpeg-turbo.org", "inside": "qpdf-wasm and Tesseract.js core", "files": ["libjpeg-turbo-LICENSE.md", "libjpeg-turbo-README.ijg"] },
+    { "name": "zlib", "licence": "Zlib", "url": "https://zlib.net", "inside": "qpdf-wasm and Tesseract.js core", "files": ["zlib-LICENSE"] },
+    { "name": "Tesseract OCR", "licence": "Apache-2.0", "url": "https://github.com/tesseract-ocr/tesseract", "inside": "Tesseract.js core" },
+    { "name": "Tesseract English model (tessdata_best)", "licence": "Apache-2.0", "url": "https://github.com/tesseract-ocr/tessdata_best", "inside": "Tesseract English data" },
+    { "name": "Leptonica", "licence": "BSD-2-Clause", "url": "http://www.leptonica.org", "inside": "Tesseract.js core", "files": ["leptonica-license.txt"] },
+    { "name": "libpng", "licence": "libpng", "url": "http://www.libpng.org", "inside": "Tesseract.js core", "files": ["libpng-LICENSE"] },
+    { "name": "LibTIFF", "licence": "libtiff", "url": "https://libtiff.gitlab.io/libtiff/", "inside": "Tesseract.js core", "files": ["libtiff-LICENSE.md"] },
+    { "name": "libwebp", "licence": "BSD-3-Clause", "url": "https://chromium.googlesource.com/webm/libwebp", "inside": "Tesseract.js core", "files": ["libwebp-COPYING", "libwebp-PATENTS"] }
+  ],
+  "acknowledgements": ["This software is based in part on the work of the Independent JPEG Group."]
+}

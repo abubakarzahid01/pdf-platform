@@ -21,9 +21,8 @@ const columns = [
   {
     title: "Legal",
     links: [
-      { href: "#", label: "Privacy" },
-      { href: "#", label: "Terms" },
-      { href: "#", label: "Security" },
+      { href: "/privacy", label: "Privacy" },
+      { href: "/licences", label: "Open-source licences" },
     ],
   },
 ];

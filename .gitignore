@@ -43,6 +43,7 @@ next-env.d.ts
 # Browser engine files, copied from node_modules by scripts/copy-engine-assets.mjs
 /public/ocr/
 /public/qpdf/
+/public/third-party-notices.txt
 
 # Sample outputs for reviewing quality by hand (not committed)
 /samples/

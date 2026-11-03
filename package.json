@@ -8,9 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "postinstall": "node scripts/copy-engine-assets.mjs",
-    "predev": "node scripts/copy-engine-assets.mjs",
-    "prebuild": "node scripts/copy-engine-assets.mjs",
+    "postinstall": "node scripts/copy-engine-assets.mjs && node scripts/third-party-notices.mjs",
+    "predev": "node scripts/copy-engine-assets.mjs && node scripts/third-party-notices.mjs",
+    "prebuild": "node scripts/copy-engine-assets.mjs && node scripts/third-party-notices.mjs",
     "converter": "node converter/server.mjs"
   },
   "dependencies": {

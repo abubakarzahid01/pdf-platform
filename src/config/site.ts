@@ -5,6 +5,8 @@ export const site = {
   tagline: "Every PDF task, done right in your browser",
   description:
     "Edit, convert, organise and extract data from PDF, Word, Excel and PowerPoint files online.",
+  contactEmail: "[CONTACT EMAIL]",
+  hostingProvider: "[HOSTING PROVIDER]",
 } as const;
 
 // Upload and processing limits. Enforced in code from Phase 3 onwards.
