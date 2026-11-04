@@ -1,0 +1,27 @@
+# The Office to PDF converter (LibreOffice). Only nginx on the same machine can reach it.
+[Unit]
+Description=EditBee Office converter
+After=network.target
+
+[Service]
+User=editbee
+Group=editbee
+WorkingDirectory=/srv/editbee/app
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=4000
+Environment=ALLOWED_ORIGIN=https://editbee.online
+Environment=WORKERS=2
+Environment=HOME=/tmp
+ExecStart=/usr/bin/node converter/server.mjs
+Restart=always
+RestartSec=3
+# A huge or broken document can't use up the memory the website needs.
+MemoryMax=3G
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

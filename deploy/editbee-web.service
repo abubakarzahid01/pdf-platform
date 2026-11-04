@@ -1,0 +1,21 @@
+# The website (Next.js). Only nginx on the same machine can reach it.
+[Unit]
+Description=EditBee website
+After=network.target
+
+[Service]
+User=editbee
+Group=editbee
+WorkingDirectory=/srv/editbee/app
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

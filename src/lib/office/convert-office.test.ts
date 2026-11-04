@@ -24,6 +24,11 @@ describe("convertOffice", () => {
     await expect(convertOffice(input, "word", {}, fetcher)).rejects.toThrow("This file's contents don't match its type.");
   });
 
+  it("asks the visitor to wait when the server's rate limit turns them away", async () => {
+    const fetcher = (async () => new Response("<html>429 Too Many Requests</html>", { status: 429 })) as unknown as typeof fetch;
+    await expect(convertOffice(input, "word", {}, fetcher)).rejects.toThrow(/wait a minute/);
+  });
+
   it("explains when the service can't be reached", async () => {
     const fetcher = (async () => {
       throw new TypeError("Failed to fetch");

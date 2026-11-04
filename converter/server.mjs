@@ -1,6 +1,7 @@
 // The conversion service: receives one Office file, returns it as a PDF.
 // Run with `npm run converter` (port 4000). Settings come from environment variables:
 //   PORT            port to listen on (default 4000)
+//   HOST            address to listen on (default all; the live server uses 127.0.0.1 behind nginx)
 //   ALLOWED_ORIGIN  the website allowed to call it (default http://localhost:3000)
 //   SOFFICE         path to LibreOffice, if it isn't in a usual place
 //   WORKERS         conversions at the same time (default 2)
@@ -10,6 +11,7 @@ import { join } from "node:path";
 import { KINDS, MAX_BYTES, checkUpload, convertToPdf, findSoffice } from "./convert.mjs";
 
 const PORT = Number(process.env.PORT ?? 4000);
+const HOST = process.env.HOST;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? "http://localhost:3000";
 const WORKERS = Math.max(1, Number(process.env.WORKERS ?? 2));
 // Requests waiting beyond this are turned away, so a flood can't pile up forever.
@@ -106,6 +108,6 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Conversion service on http://localhost:${PORT} · LibreOffice: ${soffice ?? "NOT FOUND (install it, or set SOFFICE)"}`);
+server.listen(PORT, HOST, () => {
+  console.log(`Conversion service on http://${HOST ?? "localhost"}:${PORT} · LibreOffice: ${soffice ?? "NOT FOUND (install it, or set SOFFICE)"}`);
 });

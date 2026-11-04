@@ -9,7 +9,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const MAX_BYTES = 50 * 1024 * 1024;
-export const TIMEOUT_MS = 120_000;
+// Cloudflare gives up on a request after 100 seconds, so stop before that and send a clear error.
+export const TIMEOUT_MS = 90_000;
 
 // What each tool accepts: file extensions, and the container types their bytes may have.
 export const KINDS = {

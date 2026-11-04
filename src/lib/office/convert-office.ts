@@ -21,6 +21,8 @@ export async function convertOffice(input: InputPdf, kind: OfficeKind, options: 
   } catch {
     throw new OperationError("The conversion service can't be reached right now. Please try again in a moment.");
   }
+  // The live server limits how many files one visitor can convert per minute.
+  if (response.status === 429) throw new OperationError("You've converted a lot of files in a short time. Please wait a minute and try again.");
   if (!response.ok) {
     const message = await response
       .json()
