@@ -134,7 +134,8 @@ fi
 step "Checking LibreOffice"
 check=$(sudo -u editbee mktemp -d)
 echo "EditBee test" | sudo -u editbee tee "$check/test.txt" > /dev/null
-sudo -u editbee env HOME="$check" soffice --headless --convert-to pdf --outdir "$check" "$check/test.txt" > /dev/null 2>&1 || true
+# Run from the test folder: the app user can't read root's folder, and LibreOffice needs a readable one.
+(cd "$check" && sudo -u editbee env HOME="$check" soffice --headless --convert-to pdf --outdir "$check" "$check/test.txt" > /dev/null 2>&1) || true
 if [ -f "$check/test.pdf" ]; then echo "LibreOffice works."; else echo "LibreOffice could not convert a test file." >&2; fi
 rm -rf "$check"
 
