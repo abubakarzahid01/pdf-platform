@@ -1,30 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { limits } from "@/config/site";
 import { checkFile } from "@/lib/files/check-file";
 import type { OpenDocument } from "@/lib/files/pending-document";
+import { takeHandoff, type HandoffKey } from "@/lib/files/handoff-store";
 import { Logo } from "@/components/logo";
 import { FileDropzone } from "@/components/file-dropzone";
 
 type State = { status: "idle" } | { status: "checking"; name: string } | { status: "error"; name: string; message: string };
 
-// Shown when the editor is opened without a document (direct visit or refresh).
-export function OpenFileScreen({ onOpen }: { onOpen: (doc: OpenDocument) => void }) {
+// Shown when the editor is opened without a document in memory (direct visit, refresh, or a
+// full page load after the site was updated). A file just handed over from a tool page is
+// then opened from its stored copy (`restoreKey`); otherwise the visitor picks one.
+export function OpenFileScreen({ onOpen, restoreKey }: { onOpen: (doc: OpenDocument) => void; restoreKey?: HandoffKey }) {
   const [state, setState] = useState<State>({ status: "idle" });
 
-  async function open(files: File[]) {
+  async function open(files: File[], isCancelled: () => boolean = () => false) {
     const file = files[0];
     if (!file) return;
     setState({ status: "checking", name: file.name });
     const result = await checkFile(file, ["pdf"], "a PDF");
+    if (isCancelled()) return;
     if (result.ok && result.pdf && result.pageCount) {
       onOpen({ file, pdf: result.pdf, pageCount: result.pageCount });
     } else if (!result.ok) {
       setState({ status: "error", name: file.name, message: result.message });
     }
   }
+
+  useEffect(() => {
+    if (!restoreKey) return;
+    let cancelled = false;
+    void takeHandoff(restoreKey).then((files) => {
+      if (!cancelled && files) void open(files, () => cancelled);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, on arrival
+  }, []);
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-soft">

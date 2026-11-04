@@ -29,6 +29,11 @@ export default function PrivacyPage() {
           Open files are kept in your browser&apos;s memory while you work. They are cleared when you close the tab, and
           five minutes after you leave a tool.
         </p>
+        <p>
+          When you move a file from one page to another (for example from a tool into the editor), a copy is kept for a
+          moment in your browser&apos;s own storage on your device, so the file still opens if the page reloads. It is
+          deleted as soon as the next page opens it, and never leaves your device.
+        </p>
       </LegalSection>
 
       <LegalSection title="Tools that upload your file">

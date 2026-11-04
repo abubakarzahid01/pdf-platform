@@ -8,6 +8,7 @@ import type { InputSpec } from "@/config/tools";
 import { checkFile } from "@/lib/files/check-file";
 import { useReleaseWhenHidden } from "@/lib/react/use-release-when-hidden";
 import { setPendingDocument, setPendingFiles, takeFilesForTool } from "@/lib/files/pending-document";
+import { discardHandoff, saveHandoff, takeHandoff } from "@/lib/files/handoff-store";
 import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { OperationError, baseName, type OutputFile } from "@/lib/pdf/operations/types";
 import { minimumFiles, runTool, runnableTools, uploadingTools } from "@/lib/tools/run-tool";
@@ -64,7 +65,17 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   // Files dropped on the homepage for this tool.
   useEffect(() => {
     const handed = takeFilesForTool(slug);
-    if (handed) addFiles(handed);
+    if (handed) {
+      addFiles(handed);
+      void discardHandoff(`tool:${slug}`);
+      return;
+    }
+    // The page loaded in full (e.g. the site was just updated): use the stored copy.
+    let cancelled = false;
+    void takeHandoff(`tool:${slug}`).then((files) => !cancelled && files && addFiles(files));
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, on arrival
   }, []);
 
@@ -144,16 +155,20 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   const plan =
     firstValid && pagePlan?.itemId === firstValid.id ? pagePlan.pages : defaultPlan(firstValid?.pageCount ?? 0);
 
-  function openInEditor() {
+  async function openInEditor() {
     if (!firstValid?.pdf || !firstValid.pageCount) return;
     // Hand the open document to the editor; this page must no longer close it.
     itemsRef.current = itemsRef.current.filter((i) => i.id !== firstValid.id);
     setPendingDocument({ file: firstValid.file, pdf: firstValid.pdf, pageCount: firstValid.pageCount });
+    // A stored copy too, in case the editor page loads in full and the memory hand-off is lost.
+    await saveHandoff("editor", [firstValid.file]);
     router.push("/editor");
   }
 
-  function openInExtraction() {
-    setPendingFiles(valid.map((i) => i.file));
+  async function openInExtraction() {
+    const files = valid.map((i) => i.file);
+    setPendingFiles(files);
+    await saveHandoff("extract", files);
     router.push("/extract");
   }
 

@@ -9,6 +9,7 @@ import { FileDropzone } from "@/components/file-dropzone";
 import { SelectedFiles } from "@/components/selected-files";
 import { detectKind, readHead, type FileKind } from "@/lib/files/detect-type";
 import { setFilesForTool } from "@/lib/files/pending-document";
+import { saveHandoff } from "@/lib/files/handoff-store";
 
 const IMAGE_KINDS = new Set<FileKind>(["png", "jpeg", "gif", "webp", "bmp"]);
 const SINGLE_PDF_TOOLS = ["edit-pdf", "compress-pdf", "pdf-to-word", "split-pdf", "organise-pages", "pdf-to-excel", "protect-pdf", "add-page-numbers"];
@@ -50,8 +51,10 @@ export function HeroUpload() {
     if (chosen.length) setSuggestion(await suggestTools(chosen));
   }
 
-  function open(tool: Tool) {
+  async function open(tool: Tool) {
     setFilesForTool(tool.slug, files);
+    // A stored copy too, in case the tool page loads in full and the memory hand-off is lost.
+    await saveHandoff(`tool:${tool.slug}`, files);
     router.push(`/tools/${tool.slug}`);
   }
 

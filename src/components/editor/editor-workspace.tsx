@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { clearPendingDocument, peekPendingDocument, type OpenDocument } from "@/lib/files/pending-document";
+import { discardHandoff } from "@/lib/files/handoff-store";
 import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { formatSize } from "@/components/selected-files";
 import { PrototypeBadge } from "@/components/prototype-badge";
@@ -120,6 +121,8 @@ export function EditorWorkspace() {
   useEffect(() => {
     if (!doc) return;
     clearPendingDocument(doc);
+    // The file arrived (from memory or the stored copy), so no stored copy is needed.
+    void discardHandoff("editor");
     window.clearTimeout(closeTimers.get(doc.pdf));
     closeTimers.delete(doc.pdf);
     return () => {
@@ -134,7 +137,7 @@ export function EditorWorkspace() {
     };
   }, [doc]);
 
-  if (!doc) return <OpenFileScreen onOpen={setDoc} />;
+  if (!doc) return <OpenFileScreen onOpen={setDoc} restoreKey="editor" />;
   return <Editor key={doc.pdf.fingerprints[0] ?? doc.file.name} doc={doc} onClose={() => setDoc(null)} />;
 }
 

@@ -9,6 +9,7 @@ import { PdfPageCanvas } from "@/components/pdf/pdf-page-canvas";
 import { checkFile } from "@/lib/files/check-file";
 import { downloadBytes } from "@/lib/files/download";
 import { clearPendingFiles, peekPendingFiles } from "@/lib/files/pending-document";
+import { discardHandoff, takeHandoff } from "@/lib/files/handoff-store";
 import { closePdf, loadPdfJs, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { useReleaseWhenHidden } from "@/lib/react/use-release-when-hidden";
 import { readTextItems } from "@/lib/pdf/text-items";
@@ -117,12 +118,16 @@ export function ExtractionWorkspace() {
   // of effects can't drop the files.
   useEffect(() => {
     const files = peekPendingFiles();
-    if (!files.length) return;
     let cancelled = false;
-    Promise.resolve().then(() => {
-      if (cancelled) return;
-      clearPendingFiles(files);
-      addFiles(files);
+    // Without files in memory, the page loaded in full: use the stored copy if there is one.
+    const arriving = files.length ? Promise.resolve(files) : takeHandoff("extract");
+    arriving.then((found) => {
+      if (cancelled || !found?.length) return;
+      if (found === files) {
+        clearPendingFiles(files);
+        void discardHandoff("extract");
+      }
+      addFiles(found);
     });
     return () => {
       cancelled = true;
