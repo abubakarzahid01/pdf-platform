@@ -10,7 +10,11 @@ export function proxy(request: NextRequest) {
   const slug = request.nextUrl.pathname.split("/")[2];
   if (known.has(slug)) return NextResponse.next();
   // No page exists at this path, so Next.js serves the not-found page with a 404 status.
-  return NextResponse.rewrite(new URL("/404", request.url));
+  // Built from nextUrl so the rewrite stays internal: behind nginx, request.url can carry an
+  // origin (https://localhost:3000) that Next.js would try to fetch as an outside site.
+  const url = request.nextUrl.clone();
+  url.pathname = "/404";
+  return NextResponse.rewrite(url);
 }
 
 export const config = {
