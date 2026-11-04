@@ -274,7 +274,8 @@ export function AnnotationLayer(props: Props) {
     : null;
   // While retyping an existing line, say straight away if it can't keep its font.
   const editingNotice = editingItem?.type === "lineEdit" ? similarFontNotice(props.linePreviews?.get(editingItem.id)) : null;
-  const editedLineIds = new Set(items.flatMap((a) => (a.type === "lineEdit" ? [a.lineId] : [])));
+  const editedLineText = new Map(items.flatMap((a) => (a.type === "lineEdit" ? [[a.lineId, a.text] as const] : [])));
+  const editingLineId = editingItem?.type === "lineEdit" ? editingItem.lineId : null;
 
   return (
     <svg
@@ -424,14 +425,16 @@ export function AnnotationLayer(props: Props) {
       })}
 
       {tool === "edit-text" &&
+        // Lines already changed stay clickable, so they can be edited again (onEditLine reopens
+        // the existing change); their area also covers new text that runs past the original.
         props.editableLines
-          ?.filter((l) => !editedLineIds.has(l.id))
+          ?.filter((l) => l.id !== editingLineId)
           .map((l) => (
             <rect
               key={`line-${l.id}`}
               x={l.x - 2}
               y={l.y - 1}
-              width={l.w + 4}
+              width={Math.max(l.w, (editedLineText.get(l.id)?.length ?? 0) * l.size * 0.5) + 4}
               height={l.h + 2}
               rx={2 / scale}
               className="cursor-text fill-transparent stroke-transparent hover:fill-brand/10 hover:stroke-brand"
