@@ -21,6 +21,7 @@ import {
   type ViewAnnotation,
 } from "@/components/editor/annotations";
 import type { EditorTool } from "@/components/editor/editor-workspace";
+import { similarFontNotice, type LinePreview } from "@/lib/pdf/text-edit/preview-notice";
 
 type Props = {
   page: number;
@@ -46,6 +47,8 @@ type Props = {
   // Existing lines that can be edited (shown with the Edit text tool).
   editableLines?: EditableLine[];
   onEditLine: (line: EditableLine) => void;
+  // How each edited line will be saved (by annotation id); see previewLine.
+  linePreviews?: Map<string, LinePreview>;
 };
 
 type Draft =
@@ -269,6 +272,8 @@ export function AnnotationLayer(props: Props) {
           }
         : null
     : null;
+  // While retyping an existing line, say straight away if it can't keep its font.
+  const editingNotice = editingItem?.type === "lineEdit" ? similarFontNotice(props.linePreviews?.get(editingItem.id)) : null;
   const editedLineIds = new Set(items.flatMap((a) => (a.type === "lineEdit" ? [a.lineId] : [])));
 
   return (
@@ -305,22 +310,37 @@ export function AnnotationLayer(props: Props) {
         }
         if (a.type === "lineEdit") {
           if (a.id === editingId) return <rect key={a.id} x={a.x - 1} y={a.y - 1} width={a.w + 2} height={a.h + 2} fill="#ffffff" />;
+          const preview = props.linePreviews?.get(a.id);
+          const glyphs = preview?.font === "original" ? preview.glyphs : null;
           return (
             <g key={a.id} {...common} onDoubleClick={() => selecting && props.onEdit(a.id)}>
               {/* Editor preview only: hides the old line on screen. In the saved PDF the old text is removed. */}
               <rect x={a.x - 1} y={a.y - 1} width={a.w + 2} height={a.h + 2} fill="#ffffff" />
-              <text
-                x={a.x}
-                y={a.baseline}
-                fill={a.color}
-                fontFamily={a.fontCss}
-                fontSize={a.size}
-                fontWeight={a.bold ? 700 : 400}
-                fontStyle={a.italic ? "italic" : "normal"}
-                style={{ whiteSpace: "pre" }}
-              >
-                {a.text}
-              </text>
+              {glyphs && preview?.font === "original" ? (
+                // The PDF's own glyph shapes, so the line looks as it will be saved.
+                <g transform={`translate(${a.x} ${a.baseline}) scale(${a.size / preview.unitsPerEm} ${-a.size / preview.unitsPerEm})`} fill={a.color}>
+                  {glyphs.map((g, i) => (
+                    <path key={i} d={g.d} transform={`translate(${g.x} 0)`} />
+                  ))}
+                </g>
+              ) : (
+                <text
+                  x={a.x}
+                  y={a.baseline}
+                  fill={a.color}
+                  fontFamily={a.fontCss}
+                  fontSize={a.size}
+                  fontWeight={a.bold ? 700 : 400}
+                  fontStyle={a.italic ? "italic" : "normal"}
+                  style={{ whiteSpace: "pre" }}
+                >
+                  {a.text}
+                </text>
+              )}
+              {preview?.font === "similar" && (
+                // Marks lines that will be saved in a similar font; the panel explains why.
+                <line x1={a.x} x2={a.x + Math.max(a.w, a.text.length * a.size * 0.5)} y1={a.baseline + a.size * 0.22} y2={a.baseline + a.size * 0.22} stroke="#d97706" strokeWidth={1.2 / scale} strokeDasharray={`${3 / scale} ${2 / scale}`} />
+              )}
             </g>
           );
         }
@@ -464,6 +484,11 @@ export function AnnotationLayer(props: Props) {
               whiteSpace: "pre",
             }}
           />
+          {editingNotice && (
+            <p role="status" style={{ margin: "2px 0 0", maxWidth: Math.max(160, editing.width), font: `${11 / scale}px var(--font-inter), sans-serif`, color: "#8a4b08" }}>
+              {editingNotice}
+            </p>
+          )}
         </foreignObject>
       )}
 

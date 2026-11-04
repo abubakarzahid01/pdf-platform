@@ -16,12 +16,15 @@ import {
   type ViewAnnotation,
 } from "@/components/editor/annotations";
 import type { FontFamily } from "@/lib/pdf/operations/edits";
+import { similarFontNotice, type LinePreview } from "@/lib/pdf/text-edit/preview-notice";
 import type { EditorTool } from "@/components/editor/editor-workspace";
 import { SignaturePad, type SignatureImage } from "@/components/editor/signature-pad";
 
 type Props = {
   tool: EditorTool;
   selected: ViewAnnotation | null;
+  // For an edited line: whether it keeps the PDF's font when saved.
+  linePreview?: LinePreview;
   highlightColor: string;
   inkColor: string;
   inkWidth: number;
@@ -310,6 +313,17 @@ export function PropertiesPanel(props: Props) {
             {selected.text.length > selected.original.length * 1.3 + 3 && (
               <span className="text-warn">This line is much longer than the original and may run into nearby text.</span>
             )}
+            {props.linePreview?.font === "similar" ? (
+              <span className="text-warn">
+                {similarFontNotice(props.linePreview)} Remove {props.linePreview.missing.length === 1 ? "it" : "them"} to keep the original font.
+              </span>
+            ) : props.linePreview?.font === "original" && selected.text.trim() ? (
+              <span>
+                {props.linePreview.glyphs
+                  ? "Saved in the original font, as shown."
+                  : "Saved in the original font. The page shows a similar font while you edit, as this font can't be drawn here."}
+              </span>
+            ) : null}
             <span>Double-click the text to change it again.</span>
           </div>
         )}

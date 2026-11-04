@@ -33,6 +33,8 @@ export type ViewAnnotation =
       h: number;
       baseline: number;
       size: number;
+      // The page's name for the line's font, used to preview the edit in that font.
+      fontKey: string;
       fontCss: string;
       bold: boolean;
       italic: boolean;
@@ -40,7 +42,7 @@ export type ViewAnnotation =
     };
 
 // An existing line that can be edited, in view coordinates.
-export type EditableLine = { id: number; text: string; x: number; y: number; w: number; h: number; baseline: number; size: number; baseFont: string; bold: boolean; italic: boolean; color: string };
+export type EditableLine = { id: number; text: string; x: number; y: number; w: number; h: number; baseline: number; size: number; fontKey: string; baseFont: string; bold: boolean; italic: boolean; color: string };
 
 // A similar on-screen font for a font name found in a PDF.
 export function cssFamilyFor(baseFont: string) {

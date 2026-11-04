@@ -57,6 +57,8 @@ import {
   type ViewAnnotation,
 } from "@/components/editor/annotations";
 import { applyEdits } from "@/lib/pdf/operations/edits";
+import type { FontInfo } from "@/lib/pdf/text-edit/fonts";
+import type { LinePreview } from "@/lib/pdf/text-edit/preview";
 import { OperationError } from "@/lib/pdf/operations/types";
 import { downloadBytes } from "@/lib/files/download";
 import { prepareImage, type PreparedImage } from "@/lib/files/prepare-image";
@@ -163,6 +165,11 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const [textLines, setTextLines] = useState<Map<number, EditableLine[]> | null>(null);
   const [textLinesLoading, setTextLinesLoading] = useState(false);
   const [textLinesProblem, setTextLinesProblem] = useState<string | undefined>(undefined);
+  // The fonts on each page and the preview function, loaded with the editable lines.
+  const [linePreviewer, setLinePreviewer] = useState<{
+    fonts: Map<number, Map<string, FontInfo | null>>;
+    preview: (font: FontInfo | null | undefined, text: string) => LinePreview;
+  } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Where the next chosen image goes; no x/y means the middle of the page.
   const pendingImage = useRef<{ page: number; x?: number; y?: number } | null>(null);
@@ -178,6 +185,15 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     for (const a of annotations) map.set(a.page, [...(map.get(a.page) ?? []), a]);
     return map;
   }, [annotations]);
+  // How each edited line will be saved: in the PDF's own font, or a similar one.
+  const linePreviews = useMemo(() => {
+    const map = new Map<string, LinePreview>();
+    if (!linePreviewer) return map;
+    for (const a of annotations) {
+      if (a.type === "lineEdit") map.set(a.id, linePreviewer.preview(linePreviewer.fonts.get(a.page)?.get(a.fontKey), a.text));
+    }
+    return map;
+  }, [annotations, linePreviewer]);
 
   const commit = useCallback((next: ViewAnnotation[]) => {
     setHistory((h) => ({ past: [...h.past, h.present], present: next, future: [] }));
@@ -216,9 +232,14 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     if (textLines || textLinesLoading || !sizes) return;
     setTextLinesLoading(true);
     try {
-      const [{ PDFDocument }, { readPageText }] = await Promise.all([import("pdf-lib"), import("@/lib/pdf/text-edit/lines")]);
+      const [{ PDFDocument }, { readPageText }, preview] = await Promise.all([
+        import("pdf-lib"),
+        import("@/lib/pdf/text-edit/lines"),
+        import("@/lib/pdf/text-edit/preview"),
+      ]);
       const pdf = await PDFDocument.load(new Uint8Array(await doc.file.arrayBuffer()));
       const map = new Map<number, EditableLine[]>();
+      const fonts = new Map<number, Map<string, FontInfo | null>>();
       for (let page = 0; page < pdf.getPageCount(); page++) {
         const viewport = sizes[page].viewport!;
         // Version 1 edits upright text on pages without their own rotation.
@@ -226,7 +247,9 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
           map.set(page, []);
           continue;
         }
-        const lines = readPageText(pdf, page).lines.filter((l) => l.editable);
+        const info = readPageText(pdf, page);
+        fonts.set(page, info.fonts);
+        const lines = info.lines.filter((l) => l.editable);
         map.set(
           page,
           lines.map((l) => {
@@ -241,6 +264,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
               h: l.size * 1.1,
               baseline,
               size: l.size,
+              fontKey: l.fontKey,
               baseFont: l.baseFont,
               bold: l.bold,
               italic: l.italic,
@@ -250,6 +274,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
         );
       }
       setTextLines(map);
+      setLinePreviewer({ fonts, preview: preview.previewLine });
     } catch {
       setTextLinesProblem("The text in this PDF couldn't be read for editing.");
     } finally {
@@ -277,6 +302,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
       h: line.h,
       baseline: line.baseline,
       size: line.size,
+      fontKey: line.fontKey,
       fontCss: cssFamilyFor(line.baseFont),
       bold: line.bold,
       italic: line.italic,
@@ -660,6 +686,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
                   onRequestImage={requestImage}
                   onResize={resizeAnnotation}
                   editableLines={textLines?.get(i)}
+                  linePreviews={linePreviews}
                   onEditLine={(line) => editLine(i, line)}
                 />
               )}
@@ -742,6 +769,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
           <PropertiesPanel
             tool={tool}
             selected={selected}
+            linePreview={selected ? linePreviews.get(selected.id) : undefined}
             highlightColor={highlightColor}
             inkColor={inkColor}
             inkWidth={inkWidth}

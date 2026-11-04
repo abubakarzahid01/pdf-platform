@@ -1,6 +1,11 @@
+import fontkit from "@pdf-lib/fontkit";
 import { Encodings, Font, FontNames } from "@pdf-lib/standard-fonts";
 import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, PDFRef, type PDFDocument, type PDFObject } from "pdf-lib";
 import { unzlibSync } from "fflate";
+
+// Glyph shapes from the font file embedded in the PDF, so the editor can show edited text
+// exactly as it will be saved. Paths are SVG path data in font units, y pointing up.
+export type GlyphOutlines = { unitsPerEm: number; path: (code: number) => string | null };
 
 // What the text editor needs to know about a font used on a page.
 export type FontInfo = {
@@ -12,16 +17,88 @@ export type FontInfo = {
   widthOf: (code: number) => number;
   // Codes for the given text using this font, or null if any character is missing.
   encode: (text: string) => Uint8Array | null;
+  // The embedded glyph shapes, read on first use; null when the font file can't be read.
+  outlines: () => GlyphOutlines | null;
 };
 
 function lookup(doc: PDFDocument, obj: PDFObject | undefined) {
   return obj instanceof PDFRef ? doc.context.lookup(obj) : obj;
 }
 
-function streamText(stream: PDFRawStream) {
+// A stream's decoded bytes, or null for compression other than Flate.
+function streamBytes(stream: PDFRawStream) {
   const filter = stream.dict.lookup(PDFName.of("Filter"));
-  const bytes = filter === PDFName.of("FlateDecode") ? unzlibSync(stream.contents) : stream.contents;
-  return new TextDecoder("latin1").decode(bytes);
+  const filters = filter instanceof PDFArray ? filter.asArray() : filter ? [filter] : [];
+  if (filters.length === 0) return stream.contents;
+  if (filters.length === 1 && filters[0] === PDFName.of("FlateDecode")) return unzlibSync(stream.contents);
+  return null;
+}
+
+function streamText(stream: PDFRawStream) {
+  return new TextDecoder("latin1").decode(streamBytes(stream) ?? stream.contents);
+}
+
+// TrueType (FontFile2) and OpenType (FontFile3 /OpenType) programs; bare CFF and Type 1 aren't read.
+function fontProgram(doc: PDFDocument, descriptor: PDFObject | undefined) {
+  if (!(descriptor instanceof PDFDict)) return null;
+  for (const key of ["FontFile2", "FontFile3"]) {
+    const stream = lookup(doc, descriptor.get(PDFName.of(key)));
+    if (!(stream instanceof PDFRawStream)) continue;
+    if (key === "FontFile3" && stream.dict.lookup(PDFName.of("Subtype")) !== PDFName.of("OpenType")) return null;
+    const bytes = streamBytes(stream);
+    if (!bytes) return null;
+    try {
+      return fontkit.create(bytes);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Reads glyph shapes for a font's codes. Type0 codes are CIDs, mapped to glyphs by
+ * CIDToGIDMap; simple fonts are looked up through the font's own character map.
+ */
+function readOutlines(doc: PDFDocument, fontDict: PDFDict, toText: Map<number, string>): GlyphOutlines | null {
+  const type0 = String(fontDict.lookup(PDFName.of("Subtype"))) === "/Type0";
+  let descriptorOwner: PDFObject | undefined = fontDict;
+  let cidToGid: Uint8Array | null = null;
+  if (type0) {
+    const descendants = lookup(doc, fontDict.get(PDFName.of("DescendantFonts")));
+    descriptorOwner = descendants instanceof PDFArray ? lookup(doc, descendants.get(0)) : undefined;
+    if (!(descriptorOwner instanceof PDFDict)) return null;
+    const map = lookup(doc, descriptorOwner.get(PDFName.of("CIDToGIDMap")));
+    if (map instanceof PDFRawStream) cidToGid = streamBytes(map);
+  }
+  if (!(descriptorOwner instanceof PDFDict)) return null;
+  const font = fontProgram(doc, lookup(doc, descriptorOwner.get(PDFName.of("FontDescriptor"))));
+  if (!font) return null;
+
+  const glyphId = (code: number) => {
+    if (type0) return cidToGid ? ((cidToGid[code * 2] ?? 0) << 8) | (cidToGid[code * 2 + 1] ?? 0) : code;
+    // Subset fonts map either the character, the code in the symbol range, or the code itself.
+    const text = toText.get(code);
+    for (const cp of [text ? text.codePointAt(0)! : -1, 0xf000 + code, code]) {
+      if (cp < 0) continue;
+      const id = font.glyphForCodePoint(cp)?.id ?? 0;
+      if (id) return id;
+    }
+    return 0;
+  };
+
+  return {
+    unitsPerEm: font.unitsPerEm,
+    path: (code) => {
+      const id = glyphId(code);
+      if (!id) return null;
+      try {
+        return font.getGlyph(id).path.toSVG();
+      } catch {
+        return null;
+      }
+    },
+  };
 }
 
 function utf16beHex(hex: string) {
@@ -159,7 +236,13 @@ export function readFont(doc: PDFDocument, fontDict: PDFDict): FontInfo | null {
     return new Uint8Array(out);
   };
 
-  return { baseFont, bytesPerCode, toText, widthOf, encode };
+  let outlines: GlyphOutlines | null | undefined;
+  const readOnce = () => {
+    if (outlines === undefined) outlines = readOutlines(doc, fontDict, toText);
+    return outlines;
+  };
+
+  return { baseFont, bytesPerCode, toText, widthOf, encode, outlines: readOnce };
 }
 
 export function codesOf(bytes: Uint8Array, bytesPerCode: 1 | 2) {
