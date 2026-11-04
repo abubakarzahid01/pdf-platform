@@ -1,4 +1,4 @@
-# [Brand] — Online PDF Platform
+# EditBee — Online PDF Platform
 
 An all-in-one web platform to edit, convert, organise and extract data from PDF, Word, Excel and PowerPoint files.
 
@@ -139,5 +139,4 @@ Each stage is tested and confirmed before the next one starts.
 
 ## Open decisions
 
-- Brand name and domain (replace `[Brand]` in `src/config/site.ts`)
 - File size and page limits for the public site

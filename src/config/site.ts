@@ -1,12 +1,13 @@
-// Central product settings. Placeholders in [brackets] are decisions still to be made.
+// Central product settings.
 
 export const site = {
-  name: "[Brand]",
+  name: "EditBee",
+  url: "https://editbee.online",
   tagline: "Every PDF task, done right in your browser",
   description:
     "Edit, convert, organise and extract data from PDF, Word, Excel and PowerPoint files online.",
-  contactEmail: "[CONTACT EMAIL]",
-  hostingProvider: "[HOSTING PROVIDER]",
+  contactEmail: "contact@editbee.online",
+  hostingProvider: "Hostinger",
 } as const;
 
 // Upload and processing limits. Enforced in code from Phase 3 onwards.

@@ -17,7 +17,7 @@ export default function PrivacyPage() {
     <LegalPage
       title="Privacy"
       intro="Your documents are yours. Most tools work entirely in your browser, so your files never leave your device."
-      updated="2 November 2026"
+      updated="4 November 2026"
     >
       <LegalSection title="Tools that run in your browser">
         <p>
@@ -51,15 +51,17 @@ export default function PrivacyPage() {
 
       <LegalSection title="No accounts, cookies or tracking">
         <p>
-          There are no accounts to create. The site doesn&apos;t set cookies, doesn&apos;t use analytics or advertising
-          trackers, and doesn&apos;t load fonts or scripts from other companies.
+          There are no accounts to create. The site doesn&apos;t set cookies of its own, doesn&apos;t use analytics or
+          advertising trackers, and doesn&apos;t load fonts or scripts from other companies. Cloudflare (see Hosting) may
+          set a strictly necessary security cookie to tell real visitors apart from bots.
         </p>
       </LegalSection>
 
       <LegalSection title="Hosting">
         <p>
-          The website is hosted by {site.hostingProvider}. Like any website, its servers process technical information such
-          as your IP address and browser type to deliver pages and protect the site from abuse.
+          The website is hosted by {site.hostingProvider}, and its traffic passes through Cloudflare, which speeds up
+          pages and blocks attacks. Like any website, these servers process technical information such as your IP address
+          and browser type to deliver pages and protect the site from abuse.
         </p>
       </LegalSection>
 
