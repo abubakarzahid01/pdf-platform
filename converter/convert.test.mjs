@@ -21,6 +21,9 @@ describe("checkUpload", () => {
     // A ZIP that isn't an Office document, renamed to .docx.
     const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, ...new TextEncoder().encode("photos/holiday.jpg")]);
     expect(checkUpload(zip, "fake.docx", "word")).toMatch(/isn't a valid Office document/);
+    // Plain text renamed to .docx: LibreOffice would otherwise make a PDF of the text.
+    expect(checkUpload(new TextEncoder().encode("not really a docx"), "fake.docx", "word")).toMatch(/don't match/);
+    expect(checkUpload(file("word-report.docx"), "renamed.txt", "word")).toMatch(/don't match/);
     expect(checkUpload(new Uint8Array(), "empty.docx", "word")).toMatch(/empty/);
     expect(checkUpload(file("word-report.docx"), "no-extension", "word")).toMatch(/Use a DOC, DOCX/);
   });

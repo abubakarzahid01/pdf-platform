@@ -20,6 +20,7 @@ import { FilePreview } from "@/components/tool/file-preview";
 import { ToolResult } from "@/components/tool/tool-result";
 import { PageOrganiser, defaultPlan } from "@/components/tool/page-organiser";
 import type { PagePlan } from "@/lib/pdf/operations/organize";
+import { parsePageRanges } from "@/lib/pdf/operations/page-ranges";
 
 type Props = {
   slug: string;
@@ -173,6 +174,14 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   }
 
   async function run() {
+    // A wrong page range is known straight away; don't wait for the PDF library to load first.
+    if (slug === "split-pdf" && options.mode !== "every-page" && firstValid?.pageCount) {
+      const parsed = parsePageRanges(String(options.pages ?? ""), firstValid.pageCount);
+      if (!parsed.ok) {
+        setRunError(parsed.message);
+        return;
+      }
+    }
     setRunning(true);
     setRunError(null);
     try {
@@ -188,7 +197,8 @@ export function ToolWorkspace({ slug, actionLabel, input }: Props) {
   }
 
   let note = "Add a file to get started.";
-  if (checking) note = "Checking your files…";
+  if (running) note = uploadingTools.has(slug) ? "Converting on our server…" : "Working on your files…";
+  else if (checking) note = "Checking your files…";
   else if (errors > 0) note = `Remove the ${errors === 1 ? "file" : `${errors} files`} with problems to continue.`;
   else if (hasFiles && (opensWorkspace || runnable) && !enoughFiles) note = `Add at least ${minimumFiles(slug)} ${slug === "images-to-pdf" ? "images" : "PDFs"}.`;
   else if (canAct) note = uploadingTools.has(slug) ? "Your file is sent to our conversion server and deleted straight after." : "Your files stay in your browser. Nothing is uploaded.";

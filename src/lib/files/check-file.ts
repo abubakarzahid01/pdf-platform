@@ -29,6 +29,24 @@ const kindNames: Partial<Record<FileKind, string>> = {
   text: "a text file",
 };
 
+// What an Office file's bytes may look like for each extension. A tool accepting both "text" and
+// "zip" must not let a plain-text file named .docx through: LibreOffice would turn it into a PDF of
+// that text instead of refusing it. Older .doc/.xls/.ppt files are sometimes really RTF or newer
+// ZIP-based files with an old name, which LibreOffice opens fine.
+const extensionKinds: Record<string, FileKind[]> = {
+  docx: ["zip"],
+  xlsx: ["zip"],
+  pptx: ["zip"],
+  odt: ["zip"],
+  ods: ["zip"],
+  odp: ["zip"],
+  doc: ["ole", "rtf", "zip"],
+  xls: ["ole", "zip"],
+  ppt: ["ole", "zip"],
+  rtf: ["rtf"],
+  txt: ["text"],
+};
+
 function fail(code: CheckErrorCode, message: string): CheckResult {
   return { ok: false, code, message };
 }
@@ -61,6 +79,15 @@ export async function checkFile(file: File, allowed: FileKind[], expectedLabel: 
   // stops a file being uploaded to a converter that would refuse it.
   const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
   if (extensions && !(ext && extensions.includes(ext))) return fail("wrong-type", `This file isn't ${expectedLabel}.`);
+  if (extensions && ext && extensionKinds[ext] && !extensionKinds[ext].includes(kind)) {
+    const actual = kindNames[kind];
+    return fail(
+      "wrong-type",
+      actual
+        ? `This file is ${actual}, not a real .${ext} file. It may be damaged or renamed.`
+        : `This file isn't a real .${ext} file. It may be damaged or renamed.`,
+    );
+  }
 
   if (kind !== "pdf") return { ok: true, kind };
   return openPdf(file);

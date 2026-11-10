@@ -19,6 +19,23 @@ export const KINDS = {
   powerpoint: { extensions: ["ppt", "pptx", "odp"], containers: ["zip", "ole"], label: "a PPT, PPTX or ODP file" },
 };
 
+// What the bytes may look like for each extension, so a plain-text file renamed to .docx is
+// refused instead of being turned into a PDF of its text. Older .doc/.xls/.ppt files are
+// sometimes really RTF or ZIP-based files with an old name, which LibreOffice opens fine.
+export const EXTENSION_CONTAINERS = {
+  docx: ["zip"],
+  xlsx: ["zip"],
+  pptx: ["zip"],
+  odt: ["zip"],
+  ods: ["zip"],
+  odp: ["zip"],
+  doc: ["ole", "rtf", "zip"],
+  xls: ["ole", "zip"],
+  ppt: ["ole", "zip"],
+  rtf: ["rtf"],
+  txt: ["text"],
+};
+
 function container(bytes) {
   const starts = (sig) => sig.every((b, i) => bytes[i] === b);
   if (starts([0x50, 0x4b, 0x03, 0x04])) return "zip";
@@ -39,7 +56,7 @@ export function checkUpload(bytes, fileName, kind) {
   const ext = /\.([a-z0-9]+)$/i.exec(fileName ?? "")?.[1]?.toLowerCase();
   if (!ext || !spec.extensions.includes(ext)) return `This tool doesn't take this type of file. Use ${spec.label}.`;
   const found = container(bytes);
-  if (!spec.containers.includes(found)) return "This file's contents don't match its type. It may be damaged or renamed.";
+  if (!spec.containers.includes(found) || !(EXTENSION_CONTAINERS[ext] ?? spec.containers).includes(found)) return "This file's contents don't match its type. It may be damaged or renamed.";
   // ZIP-based documents name their format inside; a random ZIP renamed to .docx is refused.
   if (found === "zip") {
     const text = Buffer.from(bytes.subarray(0, Math.min(bytes.length, 64 * 1024))).toString("latin1");
