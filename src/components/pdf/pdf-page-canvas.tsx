@@ -30,13 +30,22 @@ export function PdfPageCanvas({ pdf, pageNumber, width, className }: Props) {
         const base = page.getViewport({ scale: 1 });
         const dpr = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale: (width / base.width) * dpr });
-        const canvas = canvasRef.current;
+        // Drawn off screen and copied over when finished, so a page being redrawn (after a
+        // zoom, or with an edited line taken out) never flashes blank.
+        // Its display size is set straight away so the layout doesn't move.
+        canvasRef.current.style.width = `${width}px`;
+        canvasRef.current.style.height = `${Math.floor(viewport.height / dpr)}px`;
+        const canvas = document.createElement("canvas");
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
         renderTask = page.render({ canvas, viewport });
-        return renderTask.promise;
+        return renderTask.promise.then(() => {
+          const shown = canvasRef.current;
+          if (cancelled || !shown) return;
+          shown.width = canvas.width;
+          shown.height = canvas.height;
+          shown.getContext("2d")?.drawImage(canvas, 0, 0);
+        });
       })
       .catch((error: unknown) => {
         // A cancelled render (component unmounted or re-rendered) is expected, not a failure.

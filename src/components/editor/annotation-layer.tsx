@@ -310,13 +310,14 @@ export function AnnotationLayer(props: Props) {
           return <rect key={a.id} {...common} x={a.x} y={a.y} width={a.w} height={a.h} fill={a.color} fillOpacity={0.45} style={{ ...common.style, mixBlendMode: "multiply" }} />;
         }
         if (a.type === "lineEdit") {
-          if (a.id === editingId) return <rect key={a.id} x={a.x - 1} y={a.y - 1} width={a.w + 2} height={a.h + 2} fill="#ffffff" />;
+          // While it's being retyped, the text field shows the line.
+          if (a.id === editingId) return null;
           const preview = props.linePreviews?.get(a.id);
           const glyphs = preview?.font === "original" ? preview.glyphs : null;
           return (
             <g key={a.id} {...common} onDoubleClick={() => selecting && props.onEdit(a.id)}>
-              {/* Editor preview only: hides the old line on screen. In the saved PDF the old text is removed. */}
-              <rect x={a.x - 1} y={a.y - 1} width={a.w + 2} height={a.h + 2} fill="#ffffff" />
+              {/* The page underneath is drawn without the old line (as in the saved file), so its own background shows. */}
+              <rect x={a.x - 1} y={a.y - 1} width={a.w + 2} height={a.h + 2} fill="transparent" />
               {glyphs && preview?.font === "original" ? (
                 // The PDF's own glyph shapes, so the line looks as it will be saved.
                 <g transform={`translate(${a.x} ${a.baseline}) scale(${a.size / preview.unitsPerEm} ${-a.size / preview.unitsPerEm})`} fill={a.color}>
@@ -478,9 +479,13 @@ export function AnnotationLayer(props: Props) {
               width: Math.max(editing.size * 4, editing.width + editing.size),
               padding: 2,
               margin: 0,
-              border: `${1.5 / scale}px dashed #5a47e0`,
+              // New text boxes show their edge; an existing line is retyped in place, over the page itself.
+              border: editing.multiline ? `${1.5 / scale}px dashed #5a47e0` : `${1.5 / scale}px solid transparent`,
               borderRadius: 2,
-              background: "rgba(255,255,255,0.6)",
+              background: "transparent",
+              caretColor: editing.color,
+              // A thin underline marks the line being edited, without covering the page.
+              boxShadow: editing.multiline ? undefined : `0 ${1.5 / scale}px 0 0 rgba(90, 71, 224, 0.7)`,
               outline: "none",
               resize: "none",
               overflow: "hidden",

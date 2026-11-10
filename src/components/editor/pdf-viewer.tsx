@@ -18,12 +18,14 @@ type Props = {
   onContainerWidth: (width: number) => void;
   // Content drawn over each page, e.g. annotations.
   renderOverlay?: (pageIndex: number) => ReactNode;
+  // The document a page is drawn from, when it differs from `pdf` (e.g. a copy without edited lines).
+  pageSource?: (pageIndex: number) => PDFDocumentProxy;
 };
 
 const PAGE_GAP = 24;
 
 // Continuous, scrollable view of every page at the given scale.
-export function PdfViewer({ pdf, sizes, scale, onPageChange, scrollToRef, onContainerWidth, renderOverlay }: Props) {
+export function PdfViewer({ pdf, sizes, scale, onPageChange, scrollToRef, onContainerWidth, renderOverlay, pageSource }: Props) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const slots = useRef<(HTMLDivElement | null)[]>([]);
   const frame = useRef(0);
@@ -76,7 +78,7 @@ export function PdfViewer({ pdf, sizes, scale, onPageChange, scrollToRef, onCont
             className="relative"
           >
             <LazyPage
-              pdf={pdf}
+              pdf={pageSource?.(i) ?? pdf}
               pageNumber={i + 1}
               width={Math.floor(size.width * scale)}
               height={Math.floor(size.height * scale)}

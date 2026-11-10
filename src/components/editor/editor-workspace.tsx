@@ -204,6 +204,52 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     return map;
   }, [annotations, linePreviewer]);
 
+  // Pages with edited lines are drawn from a copy of the file with those lines taken out,
+  // exactly as the saved file does, so the page's own background (colours, images, patterns)
+  // shows behind the new text instead of a patch. The copy is rebuilt only when lines are
+  // added or removed, not while typing.
+  const removedLines = useMemo(() => {
+    const byPage = new Map<number, number[]>();
+    for (const a of annotations) if (a.type === "lineEdit") byPage.set(a.page, [...(byPage.get(a.page) ?? []), a.lineId]);
+    return new Map([...byPage].map(([p, ids]) => [p, ids.sort((x, y) => x - y).join(",")]));
+  }, [annotations]);
+  const removedKey = [...removedLines].sort(([a], [b]) => a - b).map(([p, ids]) => `${p}:${ids}`).join(";");
+  const [withoutLines, setWithoutLines] = useState<{ pdf: PDFDocumentProxy; lines: Map<number, string> } | null>(null);
+
+  useEffect(() => {
+    if (!removedKey) return;
+    let cancelled = false;
+    (async () => {
+      const [{ PDFDocument }, { applyTextEdits }, { loadPdfJs }, prepared] = await Promise.all([
+        import("pdf-lib"),
+        import("@/lib/pdf/text-edit/apply"),
+        import("@/lib/pdf/pdfjs"),
+        preparedPdf(),
+      ]);
+      const lines = new Map(removedKey.split(";").map((part) => [Number(part.split(":")[0]), part.split(":")[1]] as const));
+      const copy = await PDFDocument.load(prepared.bytes);
+      applyTextEdits(copy, [...lines].flatMap(([page, ids]) => ids.split(",").map((id) => ({ page, lineId: Number(id), text: "" }))));
+      const pdf = await (await loadPdfJs()).getDocument({ data: await copy.save() }).promise;
+      if (cancelled) closePdf(pdf);
+      else setWithoutLines({ pdf, lines });
+    })().catch(() => {
+      // The page then shows the original line underneath; the saved file is unaffected.
+    });
+    return () => {
+      cancelled = true;
+    };
+    // preparedPdf is stable for this document.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [removedKey]);
+
+  // The previous copy is released once it's replaced, and when the editor closes.
+  useEffect(() => () => closePdf(withoutLines?.pdf), [withoutLines]);
+
+  // A page uses the copy only when the copy matches its current edits; otherwise (for the
+  // moment a new copy is being made) it shows the original.
+  const pageSource = (page: number) =>
+    withoutLines && removedLines.has(page) && withoutLines.lines.get(page) === removedLines.get(page) ? withoutLines.pdf : doc.pdf;
+
   const commit = useCallback((next: ViewAnnotation[]) => {
     setHistory((h) => ({ past: [...h.past, h.present], present: next, future: [] }));
     setSaveError(null);
@@ -687,6 +733,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
           {sizes ? (
             <PdfViewer
               pdf={doc.pdf}
+              pageSource={pageSource}
               sizes={sizes}
               scale={scale}
               onPageChange={handlePageChange}
