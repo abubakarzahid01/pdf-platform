@@ -32,6 +32,7 @@ import { closePdf, type PDFDocumentProxy } from "@/lib/pdf/pdfjs";
 import { formatSize } from "@/components/selected-files";
 import { PrototypeBadge } from "@/components/prototype-badge";
 import { PropertiesPanel } from "@/components/editor/properties-panel";
+import { PageNumberField } from "@/components/editor/page-number-field";
 import { PdfViewer, type PageSize } from "@/components/editor/pdf-viewer";
 import { PageThumbnails } from "@/components/editor/page-thumbnails";
 import { OpenFileScreen } from "@/components/editor/open-file-screen";
@@ -61,6 +62,7 @@ import { applyEdits } from "@/lib/pdf/operations/edits";
 import type { FontInfo } from "@/lib/pdf/text-edit/fonts";
 import type { LinePreview } from "@/lib/pdf/text-edit/preview";
 import { OperationError } from "@/lib/pdf/operations/types";
+import type { PreparedPdf } from "@/lib/pdf/operations/prepare-edit";
 import { downloadBytes } from "@/lib/files/download";
 import { prepareImage, type PreparedImage } from "@/lib/files/prepare-image";
 import type { SignatureImage } from "@/components/editor/signature-pad";
@@ -168,6 +170,10 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
   const [textLines, setTextLines] = useState<Map<number, EditableLine[]> | null>(null);
   const [textLinesLoading, setTextLinesLoading] = useState(false);
   const [textLinesProblem, setTextLinesProblem] = useState<string | undefined>(undefined);
+  // Why a page has no editable lines, for pages where that's known (e.g. rotated pages).
+  const [noTextReasons, setNoTextReasons] = useState<Map<number, string>>(new Map());
+  // The file as the editor reads and saves it (see prepareForEditing); prepared once, on first use.
+  const preparedRef = useRef<Promise<PreparedPdf> | null>(null);
   // The fonts on each page and the preview function, loaded with the editable lines.
   const [linePreviewer, setLinePreviewer] = useState<{
     fonts: Map<number, Map<string, FontInfo | null>>;
@@ -231,28 +237,43 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
     commit(annotations.map((a) => (a.id === id && a.type === "image" ? { ...a, w, h } : a)));
   }
 
+  function preparedPdf() {
+    preparedRef.current ??= (async () => {
+      const [{ prepareForEditing }, { browserQpdf }] = await Promise.all([import("@/lib/pdf/operations/prepare-edit"), import("@/lib/pdf/qpdf-browser")]);
+      return prepareForEditing(new Uint8Array(await doc.file.arrayBuffer()), browserQpdf);
+    })();
+    // A failed attempt (e.g. qpdf didn't download) can be tried again.
+    preparedRef.current.catch(() => (preparedRef.current = null));
+    return preparedRef.current;
+  }
+
   async function loadTextLines() {
     if (textLines || textLinesLoading || !sizes) return;
     setTextLinesLoading(true);
     try {
-      const [{ PDFDocument }, { readPageText }, preview] = await Promise.all([
+      const [{ PDFDocument }, { readPageText, noEditableTextReason }, preview, prepared] = await Promise.all([
         import("pdf-lib"),
         import("@/lib/pdf/text-edit/lines"),
         import("@/lib/pdf/text-edit/preview"),
+        preparedPdf(),
       ]);
-      const pdf = await PDFDocument.load(new Uint8Array(await doc.file.arrayBuffer()));
+      const pdf = await PDFDocument.load(prepared.bytes);
       const map = new Map<number, EditableLine[]>();
+      const reasons = new Map<number, string>();
       const fonts = new Map<number, Map<string, FontInfo | null>>();
       for (let page = 0; page < pdf.getPageCount(); page++) {
         const viewport = sizes[page].viewport!;
         // Version 1 edits upright text on pages without their own rotation.
         if (((viewport.rotation % 360) + 360) % 360 !== 0) {
           map.set(page, []);
+          reasons.set(page, "This page is rotated, and text on rotated pages can't be edited yet. Other tools (Add text, comments, shapes) still work here.");
           continue;
         }
         const info = readPageText(pdf, page);
         fonts.set(page, info.fonts);
         const lines = info.lines.filter((l) => l.editable);
+        const reason = lines.length === 0 ? noEditableTextReason(info) : null;
+        if (reason) reasons.set(page, reason);
         map.set(
           page,
           lines.map((l) => {
@@ -267,7 +288,8 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
               h: l.size * 1.1,
               baseline,
               size: l.size,
-              fontKey: l.fontKey,
+              // Right-to-left lines are always saved in a font that joins their letters.
+              fontKey: l.rightToLeft ? "" : l.fontKey,
               baseFont: l.baseFont,
               bold: l.bold,
               italic: l.italic,
@@ -277,9 +299,10 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
         );
       }
       setTextLines(map);
+      setNoTextReasons(reasons);
       setLinePreviewer({ fonts, preview: preview.previewLine });
-    } catch {
-      setTextLinesProblem("The text in this PDF couldn't be read for editing.");
+    } catch (error) {
+      setTextLinesProblem(error instanceof OperationError ? error.message : "The text in this PDF couldn't be read for editing.");
     } finally {
       setTextLinesLoading(false);
     }
@@ -526,13 +549,14 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
         import("@/lib/pdf/fonts-browser"),
         import("@/lib/pdf/extract-text-browser"),
       ]);
+      const prepared = await preparedPdf();
       const result = await applyEdits(
-        { name: doc.file.name, bytes: new Uint8Array(await doc.file.arrayBuffer()) },
+        { name: doc.file.name, bytes: prepared.bytes },
         { texts, images, shapes, annotations: pdfAnnotations, lineEdits },
         browserFontLoader,
         browserTextExtractor,
       );
-      downloadBytes(result.bytes, result.name);
+      downloadBytes(await prepared.finish(result.bytes), result.name);
       const notes: string[] = [];
       if (result.fontFallbacks > 0) {
         notes.push(
@@ -540,7 +564,9 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
         );
       }
       if (result.substitutions > 0) {
-        notes.push(`${result.substitutions} text${result.substitutions > 1 ? "s use" : " uses"} characters the chosen font can't show, so Inter was used instead.`);
+        notes.push(
+          `${result.substitutions} text${result.substitutions > 1 ? "s use" : " uses"} characters the chosen font can't show, so a font that has them was used for those characters.`,
+        );
       }
       if (notes.length) setSaveNotice(notes.join(" "));
     } catch (error) {
@@ -704,21 +730,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
             <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => goTo(page - 1)} className={iconButton}>
               <ChevronLeft className="size-4" />
             </button>
-            <label className="flex items-center gap-2 text-muted">
-              Page
-              <input
-                key={page}
-                defaultValue={page}
-                inputMode="numeric"
-                aria-label="Current page"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") goTo(Number(e.currentTarget.value) || page);
-                }}
-                onBlur={(e) => goTo(Number(e.currentTarget.value) || page)}
-                className="w-12 rounded-lg border border-line px-1.5 py-1.5 text-center font-semibold text-ink"
-              />
-              of {doc.pageCount}
-            </label>
+            <PageNumberField page={page} pageCount={doc.pageCount} onGo={goTo} />
             <button type="button" aria-label="Next page" disabled={page >= doc.pageCount} onClick={() => goTo(page + 1)} className={iconButton}>
               <ChevronRight className="size-4" />
             </button>
@@ -799,6 +811,7 @@ function Editor({ doc, onClose }: { doc: OpenDocument; onClose: () => void }) {
               problem: textLinesProblem,
               page: page - 1,
               editableOnPage: textLines?.get(page - 1)?.length ?? 0,
+              reason: noTextReasons.get(page - 1),
             }}
           />
           <input

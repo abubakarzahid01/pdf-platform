@@ -25,13 +25,22 @@ function lookup(doc: PDFDocument, obj: PDFObject | undefined) {
   return obj instanceof PDFRef ? doc.context.lookup(obj) : obj;
 }
 
-// A stream's decoded bytes, or null for compression other than Flate.
-function streamBytes(stream: PDFRawStream) {
+// A stream's decoded bytes, or null for compression other than Flate (files using other
+// filters are converted with qpdf before editing) or data that doesn't decode.
+export function streamBytes(stream: PDFRawStream): Uint8Array | null {
   const filter = stream.dict.lookup(PDFName.of("Filter"));
   const filters = filter instanceof PDFArray ? filter.asArray() : filter ? [filter] : [];
-  if (filters.length === 0) return stream.contents;
-  if (filters.length === 1 && filters[0] === PDFName.of("FlateDecode")) return unzlibSync(stream.contents);
-  return null;
+  if (!filters.every((f) => f === PDFName.of("FlateDecode"))) return null;
+  // Predictors are only used for images, never for content or font streams.
+  if (stream.dict.has(PDFName.of("DecodeParms")) && filters.length > 0) {
+    const parms = stream.dict.lookup(PDFName.of("DecodeParms"));
+    if (parms instanceof PDFDict && parms.has(PDFName.of("Predictor"))) return null;
+  }
+  try {
+    return filters.reduce<Uint8Array>((bytes) => unzlibSync(bytes), stream.contents);
+  } catch {
+    return null;
+  }
 }
 
 function streamText(stream: PDFRawStream) {
@@ -140,6 +149,31 @@ const winAnsiToText = (() => {
   return map;
 })();
 
+// Glyph names (as used in /Differences) for the Latin and symbol characters, from the standard encodings.
+const glyphNames = (() => {
+  const map = new Map<string, string>();
+  // The first character wins: e.g. "space" also names the no-break space in WinAnsi.
+  for (const encoding of [Encodings.WinAnsi, Encodings.Symbol]) {
+    for (const cp of encoding.supportedCodePoints) {
+      const { name } = encoding.encodeUnicodeCodePoint(cp);
+      if (!map.has(name)) map.set(name, String.fromCodePoint(cp));
+    }
+  }
+  for (const lig of ["ff", "fi", "fl", "ffi", "ffl"]) map.set(lig, lig);
+  return map;
+})();
+
+// The text a glyph name stands for: a known name, uniXXXX or uXXXX[XX]; suffixes like ".sc" are ignored.
+export function glyphNameText(name: string): string | undefined {
+  const base = name.split(".")[0];
+  if (glyphNames.has(base)) return glyphNames.get(base);
+  const uni = /^uni((?:[0-9A-F]{4})+)$/.exec(base);
+  if (uni) return uni[1].match(/.{4}/g)!.map((h) => String.fromCharCode(parseInt(h, 16))).join("");
+  const u = /^u([0-9A-F]{4,6})$/.exec(base);
+  if (u) return String.fromCodePoint(parseInt(u[1], 16));
+  return undefined;
+}
+
 const standardNames = new Set<string>(Object.values(FontNames));
 
 function cidWidths(doc: PDFDocument, descendant: PDFDict) {
@@ -200,8 +234,8 @@ export function readFont(doc: PDFDocument, fontDict: PDFDict): FontInfo | null {
       // The 14 standard fonts may omit widths; use the built-in metrics.
       const metrics = Font.load(plainName as FontNames);
       widthOf = (code) => {
-        const text = winAnsiToText.get(code);
-        if (!text) return 0;
+        const text = toText.get(code);
+        if (!text || !Encodings.WinAnsi.canEncodeUnicodeCodePoint(text.codePointAt(0)!)) return 0;
         const { name } = Encodings.WinAnsi.encodeUnicodeCodePoint(text.codePointAt(0)!);
         return metrics.getWidthOfGlyph(name) ?? 0;
       };
@@ -213,7 +247,22 @@ export function readFont(doc: PDFDocument, fontDict: PDFDict): FontInfo | null {
       const descriptor = lookup(doc, fontDict.get(PDFName.of("FontDescriptor")));
       return descriptor instanceof PDFDict && ["FontFile", "FontFile2", "FontFile3"].some((k) => descriptor.has(PDFName.of(k)));
     })();
-    if (toText.size === 0 && (encoding === PDFName.of("WinAnsiEncoding") || encoding === undefined || standardNames.has(plainName))) {
+    if (toText.size === 0 && encoding instanceof PDFDict) {
+      // A base encoding (taken as WinAnsi, which matches the others for ASCII) with
+      // /Differences that rename codes by glyph name.
+      for (const [code, text] of winAnsiToText) toText.set(code, text);
+      const differences = lookup(doc, encoding.get(PDFName.of("Differences")));
+      let code = 0;
+      for (const item of differences instanceof PDFArray ? differences.asArray().map((o) => lookup(doc, o)) : []) {
+        if (item instanceof PDFNumber) code = item.asNumber();
+        else if (item instanceof PDFName) {
+          const text = glyphNameText(item.decodeText());
+          if (text) toText.set(code, text);
+          else toText.delete(code);
+          code++;
+        }
+      }
+    } else if (toText.size === 0 && (encoding === PDFName.of("WinAnsiEncoding") || encoding === undefined || standardNames.has(plainName))) {
       for (const [code, text] of winAnsiToText) toText.set(code, text);
       anyWinAnsi = !embedded && standardNames.has(plainName);
     }

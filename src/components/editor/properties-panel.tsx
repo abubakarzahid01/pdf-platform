@@ -44,7 +44,7 @@ type Props = {
   onLinkChange: (id: string, patch: { mode?: "url" | "page"; url?: string; targetPage?: number }) => void;
   pageCount: number;
   // Edit text tool: whether lines are being found, and what was found on the current page.
-  textLinesStatus: { loading: boolean; editableOnPage: number; problem?: string; page: number };
+  textLinesStatus: { loading: boolean; editableOnPage: number; problem?: string; page: number; reason?: string };
 };
 
 const comingLater: Partial<Record<EditorTool, string>> = {};
@@ -59,7 +59,16 @@ function EditTextHelp({ status }: { status: Props["textLinesStatus"] }) {
         <p className="rounded-[10px] border border-warn/25 bg-warn-soft px-3 py-2 text-sm text-warn">{status.problem}</p>
       ) : status.editableOnPage === 0 ? (
         <p className="rounded-[10px] border border-warn/25 bg-warn-soft px-3 py-2 text-sm text-warn">
-          No editable text on page {status.page + 1}. If it&apos;s a scanned page, its text is an image and can&apos;t be edited here. PDF to Text and Invoice to Excel can read it with text recognition (OCR).
+          {status.reason ? (
+            <>
+              No editable text on page {status.page + 1}. {status.reason}
+            </>
+          ) : (
+            <>
+              No text found on page {status.page + 1}. If it&apos;s a scanned page, its text is an image and can&apos;t be edited here. PDF to Text and
+              Invoice to Excel can read it with text recognition (OCR).
+            </>
+          )}
         </p>
       ) : (
         <p className="text-xs text-subtle">
@@ -74,7 +83,7 @@ function EditTextHelp({ status }: { status: Props["textLinesStatus"] }) {
         </span>
       </div>
       <p className="text-xs text-subtle">
-        Not yet supported: rotated or slanted text, text inside embedded graphics, and right-to-left scripts. Text
+        Not yet supported: rotated or slanted text, and rotated pages. Arabic, Urdu and Hebrew lines are saved in a matching font. Text
         doesn&apos;t reflow, so a much longer line may run past its space.
       </p>
     </>
@@ -275,11 +284,10 @@ function TextControls({ style, onChange }: { style: TextStyle; onChange: (patch:
         </button>
       </div>
       <Swatches label="Colour" colors={textColors} value={style.color} onChange={(color) => onChange({ color })} />
-      {style.family !== "inter" && (
-        <p className="text-xs text-subtle">
-          Standard fonts cover Western European letters. Text with other characters is saved in Inter instead.
-        </p>
-      )}
+      <p className="text-xs text-subtle">
+        {style.family !== "inter" && "Standard fonts cover Western European letters; other letters are saved in Inter. "}
+        Chinese, Japanese, Korean, Arabic, Urdu, Hebrew, Thai and Hindi are saved in a matching font, so they look the same in any PDF viewer.
+      </p>
     </>
   );
 }

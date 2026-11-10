@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { PDFDocument } from "pdf-lib";
+import { nodeFontLoader } from "../fonts-node";
 import { describe, expect, it } from "vitest";
-import { applyEdits, type FontLoader } from "../operations/edits";
+import { applyEdits } from "../operations/edits";
 import type { TextExtractor } from "./apply";
 import { codesOf } from "./fonts";
 import { readPageText } from "./lines";
@@ -13,9 +13,7 @@ function bytesOf(name: string) {
   return new Uint8Array(readFileSync(new URL(`../../../../test-files/${name}`, import.meta.url)));
 }
 
-const require = createRequire(import.meta.url);
-const loadFont: FontLoader = async (style) =>
-  new Uint8Array(readFileSync(require.resolve(`@expo-google-fonts/inter/${{ regular: "400Regular/Inter_400Regular.ttf", bold: "700Bold/Inter_700Bold.ttf", italic: "400Regular_Italic/Inter_400Regular_Italic.ttf", boldItalic: "700Bold_Italic/Inter_700Bold_Italic.ttf" }[style]}`)));
+const loadFont = nodeFontLoader;
 
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 const extract: TextExtractor = async (bytes, pageIndex) => {

@@ -105,7 +105,7 @@ export const fontFamilies: { value: FontFamily; label: string; css: string }[] =
   { value: "helvetica", label: "Helvetica", css: "Helvetica, Arial, sans-serif" },
   { value: "times", label: "Times", css: "'Times New Roman', Times, serif" },
   { value: "courier", label: "Courier", css: "'Courier New', Courier, monospace" },
-  { value: "inter", label: "Inter (all languages)", css: "var(--font-inter), Inter, sans-serif" },
+  { value: "inter", label: "Inter (many languages)", css: "var(--font-inter), Inter, sans-serif" },
 ];
 export const defaultTextStyle: TextStyle = { family: "helvetica", size: 14, color: textColors[0], bold: false, italic: false };
 

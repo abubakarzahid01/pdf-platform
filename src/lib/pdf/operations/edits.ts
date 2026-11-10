@@ -1,17 +1,21 @@
+// fontkit's Indic shaper (used for Hindi) needs this generator helper, which its build leaves out.
+import "regenerator-runtime/runtime.js";
 import fontkit from "@pdf-lib/fontkit";
-import { degrees, LineCapStyle, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { degrees, LineCapStyle, PDFDocument, PDFHexString, PDFName, PDFOperator, PDFOperatorNames, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { addAnnotations, type PdfAnnotation, type Rgb } from "./annotate";
 import { baseName, OperationError, type InputPdf, type OutputFile } from "./types";
 import { applyTextEdits, verifyTextEdits, type FallbackLine, type TextExtractor, type TextLineEdit } from "../text-edit/apply";
+import { rightToLeft, scriptOf, type FontFile, type InterStyle, type Script } from "../font-files";
 
 export type FontFamily = "helvetica" | "times" | "courier" | "inter";
-export type InterStyle = "regular" | "bold" | "italic" | "boldItalic";
+export type { InterStyle } from "../font-files";
 
 // New text in PDF coordinates. Each line has its own baseline start point, already
 // converted from the screen (so rotated pages are handled by the caller's conversion).
 export type PdfText = {
   page: number;
-  lines: { text: string; x: number; y: number }[];
+  // `rightEdge`, when set, is where the line should end instead (right-to-left lines).
+  lines: { text: string; x: number; y: number; rightEdge?: number }[];
   family: FontFamily;
   bold: boolean;
   italic: boolean;
@@ -56,7 +60,7 @@ export type Edits = {
 // Picks a standard font close to the original one for a line that can't keep its font.
 function fallbackText(line: FallbackLine): PdfText {
   const family: FontFamily = /times|serif|georgia|garamond|cambria/i.test(line.baseFont) && !/sans/i.test(line.baseFont) ? "times" : /courier|mono/i.test(line.baseFont) ? "courier" : "helvetica";
-  return { page: line.page, lines: [{ text: line.text, x: line.x, y: line.y }], family, bold: line.bold, italic: line.italic, size: line.size, color: line.color, rotate: 0 };
+  return { page: line.page, lines: [{ text: line.text, x: line.x, y: line.y, rightEdge: line.rightEdge }], family, bold: line.bold, italic: line.italic, size: line.size, color: line.color, rotate: 0 };
 }
 
 const FILL_OPACITY = 0.25;
@@ -91,8 +95,8 @@ function drawShape(page: PDFPage, s: PdfShape) {
   }
 }
 
-// Supplies Inter font files: the browser fetches them, tests read them from disk.
-export type FontLoader = (style: InterStyle) => Promise<Uint8Array>;
+// Supplies font files (Inter and the Noto fonts): the browser fetches them, tests read them from disk.
+export type FontLoader = (file: FontFile) => Promise<Uint8Array>;
 
 const standard: Record<Exclude<FontFamily, "inter">, [StandardFonts, StandardFonts, StandardFonts, StandardFonts]> = {
   helvetica: [StandardFonts.Helvetica, StandardFonts.HelveticaBold, StandardFonts.HelveticaOblique, StandardFonts.HelveticaBoldOblique],
@@ -105,6 +109,99 @@ function styleIndex(bold: boolean, italic: boolean) {
 }
 
 const interStyles: InterStyle[] = ["regular", "bold", "italic", "boldItalic"];
+
+// fontkit's TrueType subsetter (used by pdf-lib) records where each glyph starts in a
+// format that only works when every glyph's data has an even length. Many fonts have
+// odd-length glyphs (half of Noto Sans SC's), and the letters after the first such glyph
+// then come out blank. Each copied glyph is padded to an even length, as the format expects.
+const paddedSubsetters = new WeakSet<object>();
+function padSubsetGlyphs(font: PDFFont) {
+  const subset = (font as unknown as { embedder: { subset?: object } }).embedder.subset;
+  if (!subset) return;
+  type Subsetter = { _addGlyph: (this: { glyf: Uint8Array[]; offset: number }, gid: number) => number };
+  const proto = Object.getPrototypeOf(subset) as Subsetter;
+  if (paddedSubsetters.has(proto)) return;
+  const addGlyph = proto._addGlyph;
+  proto._addGlyph = function (gid) {
+    const index = addGlyph.call(this, gid);
+    const data = this.glyf[index];
+    if (data.length % 2 === 1) {
+      // fontkit's own Buffer type (a Uint8Array), which its encoder requires.
+      const padded = new (data.constructor as new (length: number) => Uint8Array)(data.length + 1);
+      padded.set(data);
+      this.glyf[index] = padded;
+      this.offset += 1;
+    }
+    return index;
+  };
+  paddedSubsetters.add(proto);
+}
+
+const characterSets = new WeakMap<PDFFont, Set<number>>();
+function covers(font: PDFFont, ch: string) {
+  if (!characterSets.has(font)) characterSets.set(font, new Set(font.getCharacterSet()));
+  return characterSets.get(font)!.has(ch.codePointAt(0)!);
+}
+
+// Splits a line into pieces that each use one font: the text's own font where it has the
+// characters, otherwise the Noto font for the writing system. Spaces, punctuation and
+// combining marks stay with the piece around them, so words and joined scripts aren't split.
+// The font for each character the text's own font lacks, keyed by "script:character".
+type CharacterFonts = Map<string, PDFFont>;
+
+// Chinese, Japanese and Korean fonts each lack some of the others' Han characters.
+const fallbackScripts: Record<Script, Script[]> = {
+  sc: ["sc", "jp", "kr"],
+  jp: ["jp", "sc", "kr"],
+  kr: ["kr", "sc", "jp"],
+  arabic: ["arabic"],
+  hebrew: ["hebrew"],
+  thai: ["thai"],
+  devanagari: ["devanagari"],
+};
+
+function fontRuns(text: string, base: PDFFont, fonts: CharacterFonts) {
+  const runs: { text: string; font: PDFFont; script: Script | null }[] = [];
+  const missing = new Set<string>();
+  for (const ch of text) {
+    const last = runs[runs.length - 1];
+    const neutral = !/[\p{L}\p{N}]/u.test(ch);
+    if (last && neutral && covers(last.font, ch)) {
+      last.text += ch;
+      continue;
+    }
+    const script = covers(base, ch) ? null : scriptOf(ch.codePointAt(0)!, text);
+    const font = script ? (fonts.get(`${script}:${ch}`) ?? base) : base;
+    if (!covers(font, ch) && ch.trim()) missing.add(ch);
+    if (last && last.font === font) last.text += ch;
+    else runs.push({ text: ch, font, script });
+  }
+  if (missing.size > 0) {
+    throw new OperationError(`These characters can't be saved yet: ${[...missing].join(" ")}. Please remove them and try again.`);
+  }
+  return runs;
+}
+
+// Ligatures in right-to-left text (such as lam-alef, لا) are single glyphs that stand for
+// several letters. Viewers reverse right-to-left text letter by letter when reading it out,
+// so a ligature's letters are recorded in display order to come out in typed order. The
+// glyph objects are shared by fontkit, so each is reversed only once.
+const reversedLigatures = new WeakSet<object>();
+function storeLigaturesForReading(font: PDFFont, text: string) {
+  const fontkitFont = (font as unknown as { embedder: { font: { layout: (t: string) => { glyphs: { codePoints: number[] }[] } } } }).embedder.font;
+  for (const glyph of fontkitFont.layout(text).glyphs) {
+    if (glyph.codePoints.length > 1 && !reversedLigatures.has(glyph)) {
+      glyph.codePoints.reverse();
+      reversedLigatures.add(glyph);
+    }
+  }
+}
+
+// The writing system of the first letter that has a direction, for ordering a line's pieces.
+function firstStrongScript(text: string) {
+  for (const ch of text) if (/\p{L}/u.test(ch)) return scriptOf(ch.codePointAt(0)!, text);
+  return null;
+}
 
 // Standard PDF fonts only cover Western European characters (WinAnsi).
 function canEncode(font: PDFFont, text: string) {
@@ -189,6 +286,18 @@ export async function applyEdits(
     drawShape(page, s);
   }
 
+  const scriptCache = new Map<FontFile, PDFFont>();
+  const scriptFont = async (script: Script, bold: boolean) => {
+    const file: FontFile = `${script}-${bold ? "bold" : "regular"}`;
+    // Only the characters used are embedded: the full Chinese font alone is 10 MB.
+    if (!scriptCache.has(file)) {
+      const embedded = await doc.embedFont(await loadFont(file), { subset: true });
+      padSubsetGlyphs(embedded);
+      scriptCache.set(file, embedded);
+    }
+    return scriptCache.get(file)!;
+  };
+
   let substitutions = 0;
   for (const t of texts) {
     const page = pages[t.page];
@@ -198,25 +307,68 @@ export async function applyEdits(
 
     const index = styleIndex(t.bold, t.italic);
     let font: PDFFont;
+    let substituted = false;
     if (t.family === "inter") {
       font = await interFont(interStyles[index]);
     } else {
       font = await standardFont(standard[t.family][index]);
+      // Characters outside the standard set: Inter keeps the text in one consistent font.
       if (!lines.every((l) => canEncode(font, l.text))) {
         font = await interFont(interStyles[index]);
-        substitutions++;
+        substituted = true;
       }
     }
 
+    // Writing systems Inter doesn't have (Chinese, Arabic, ...) are drawn in a Noto font.
+    // Each such character gets the first font that has it, starting with its writing system's.
+    const fonts: CharacterFonts = new Map();
     for (const line of lines) {
-      page.drawText(line.text, {
-        x: line.x,
-        y: line.y,
-        size: t.size,
-        font,
-        color: rgb(...t.color),
-        rotate: degrees(t.rotate),
-      });
+      for (const ch of line.text) {
+        const script = covers(font, ch) ? null : scriptOf(ch.codePointAt(0)!, line.text);
+        if (!script || fonts.has(`${script}:${ch}`)) continue;
+        for (const candidate of fallbackScripts[script]) {
+          const scriptFontFile = await scriptFont(candidate, t.bold);
+          if (covers(scriptFontFile, ch)) {
+            fonts.set(`${script}:${ch}`, scriptFontFile);
+            break;
+          }
+        }
+      }
+    }
+    if (fonts.size > 0) substituted = true;
+    if (substituted) substitutions++;
+
+    for (const line of lines) {
+      const runs = fontRuns(line.text, font, fonts);
+      const sizes = runs.map((r) => r.font.widthOfTextAtSize(r.text, t.size));
+      // In a right-to-left line, the runs follow each other from right to left.
+      const order = runs.map((_, i) => i);
+      if (rightToLeft(firstStrongScript(line.text))) order.reverse();
+      const angle = (t.rotate * Math.PI) / 180;
+      let advance = line.rightEdge === undefined ? 0 : line.rightEdge - line.x - sizes.reduce((a, b) => a + b, 0);
+      for (const i of order) {
+        // Shaped scripts are stored as glyphs in display order (e.g. Arabic right to left,
+        // Hindi vowel signs before their consonant). ActualText records the typed text, so
+        // viewers that support it copy and search the words as written.
+        const shaped = runs[i].font !== font;
+        if (rightToLeft(runs[i].script)) storeLigaturesForReading(runs[i].font, runs[i].text);
+        if (shaped) {
+          page.pushOperators(
+            // pdf-lib's types leave out dictionaries as operands, but they are written correctly.
+            PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [PDFName.of("Span"), doc.context.obj({ ActualText: PDFHexString.fromText(runs[i].text) }) as unknown as PDFName]),
+          );
+        }
+        page.drawText(runs[i].text, {
+          x: line.x + advance * Math.cos(angle),
+          y: line.y + advance * Math.sin(angle),
+          size: t.size,
+          font: runs[i].font,
+          color: rgb(...t.color),
+          rotate: degrees(t.rotate),
+        });
+        if (shaped) page.pushOperators(PDFOperator.of(PDFOperatorNames.EndMarkedContent));
+        advance += sizes[i];
+      }
     }
   }
 

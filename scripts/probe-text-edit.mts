@@ -2,16 +2,14 @@
 //   npx vite-node scripts/probe-text-edit.mts [file.pdf ...]   (defaults to every PDF in test-files/)
 // For each file: lines found vs. what PDF.js sees, fonts, and whether sample edits pass the check.
 import { readdirSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { PDFDocument } from "pdf-lib";
-import { applyEdits, type FontLoader } from "../src/lib/pdf/operations/edits";
+import { applyEdits } from "../src/lib/pdf/operations/edits";
+import { nodeFontLoader } from "../src/lib/pdf/fonts-node";
 import type { TextExtractor } from "../src/lib/pdf/text-edit/apply";
 import { readPageText } from "../src/lib/pdf/text-edit/lines";
 
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-const require = createRequire(import.meta.url);
-const interFile = { regular: "400Regular/Inter_400Regular.ttf", bold: "700Bold/Inter_700Bold.ttf", italic: "400Regular_Italic/Inter_400Regular_Italic.ttf", boldItalic: "700Bold_Italic/Inter_700Bold_Italic.ttf" };
-const loadFont: FontLoader = async (s) => new Uint8Array(readFileSync(require.resolve(`@expo-google-fonts/inter/${interFile[s]}`)));
+const loadFont = nodeFontLoader;
 
 async function items(bytes: Uint8Array, page: number) {
   const doc = await pdfjs.getDocument({ data: bytes.slice(), verbosity: 0 }).promise;

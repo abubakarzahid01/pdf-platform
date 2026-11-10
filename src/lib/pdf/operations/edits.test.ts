@@ -1,22 +1,15 @@
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { nodeFontLoader } from "../fonts-node";
 import { describe, expect, it } from "vitest";
 import jpegJs from "jpeg-js";
-import { applyEdits, type FontLoader, type PdfText } from "./edits";
+import { applyEdits, type PdfText } from "./edits";
 import { viewPointToPdf, viewRectToPdfPlacement, viewRectToPdfRect } from "../view-to-pdf";
 import type { InputPdf } from "./types";
 
 // PDF.js's Node build reads text back out of outputs, to prove the text is real and upright.
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-const require = createRequire(import.meta.url);
-const interFiles = {
-  regular: "400Regular/Inter_400Regular.ttf",
-  bold: "700Bold/Inter_700Bold.ttf",
-  italic: "400Regular_Italic/Inter_400Regular_Italic.ttf",
-  boldItalic: "700Bold_Italic/Inter_700Bold_Italic.ttf",
-};
-const loadFont: FontLoader = async (style) => new Uint8Array(readFileSync(require.resolve(`@expo-google-fonts/inter/${interFiles[style]}`)));
+const loadFont = nodeFontLoader;
 
 function fixture(name: string): InputPdf {
   return { name, bytes: new Uint8Array(readFileSync(new URL(`../../../../test-files/${name}`, import.meta.url))) };
@@ -79,6 +72,119 @@ describe("applyEdits", () => {
     // Full fonts are embedded (subsetting damaged glyphs). Four styles are about 1.3 MB of
     // font data, stored compressed; each must be embedded once, not once per text box.
     expect(result.bytes.length - input.bytes.length).toBeLessThan(1.4 * 1024 * 1024);
+  });
+
+  describe("other writing systems", () => {
+    const samples = {
+      chinese: "中文测试：你好，世界。",
+      japanese: "日本語のテキスト、カタカナ",
+      korean: "한국어 텍스트 안녕하세요",
+      arabic: "مرحبا بالعالم",
+      hebrew: "שלום עולם",
+      thai: "สวัสดีชาวโลก",
+      hindi: "नमस्ते दुनिया",
+    };
+
+    // PDF.js may split a line into pieces (one per font); joined, they must give the text back.
+    const joined = async (bytes: Uint8Array) => (await pageText(bytes, 1)).map((t) => t.str).join("").replace(/\s+/g, "");
+    const squash = (s: string) => s.replace(/\s+/g, "");
+
+    for (const family of ["inter", "helvetica"] as const) {
+      it(`saves Chinese, Japanese, Korean, Arabic, Hebrew, Thai and Hindi text so it reads back the same (${family})`, async () => {
+        const lines = Object.values(samples).map((text, i) => ({ text, x: 60, y: 600 - i * 30 }));
+        const input = fixture("sample-3-pages.pdf");
+        const result = await applyEdits(input, { texts: [{ ...base, family, page: 0, lines }], annotations: [] }, loadFont);
+        expect(result.substitutions).toBe(1);
+        const text = await joined(result.bytes);
+        for (const sample of Object.values(samples)) {
+          // Right-to-left text is stored in display order; PDF.js puts it back in reading order.
+          // Hindi's short-i sign is read back before its consonant, as it is drawn.
+          const loose = (s: string) => s.replaceAll("ि", "");
+          expect(loose(text)).toContain(loose(squash(sample)));
+        }
+        expect(text).toContain(squash(samples.arabic));
+        // Only the characters used are embedded, not the 10 MB Chinese font.
+        expect(result.bytes.length - input.bytes.length).toBeLessThan(family === "inter" ? 900 * 1024 : 400 * 1024);
+      });
+    }
+
+    it("embeds font subsets whose letters all have their shapes", async () => {
+      // Noto Sans SC has odd-length glyphs, which broke pdf-lib's subsets: every letter
+      // after the first came out blank although the text could still be copied.
+      const result = await applyEdits(
+        fixture("sample-3-pages.pdf"),
+        { texts: [{ ...base, page: 0, lines: [{ text: "年度报告 中文测试 日本語のテキスト 한국어", x: 60, y: 300 }] }], annotations: [] },
+        loadFont,
+      );
+      const { PDFDocument, PDFDict, PDFName, PDFRawStream } = await import("pdf-lib");
+      const { unzlibSync } = await import("fflate");
+      const fontkit = (await import("@pdf-lib/fontkit")).default;
+      const doc = await PDFDocument.load(result.bytes);
+      const subsets = doc.context
+        .enumerateIndirectObjects()
+        .map(([, obj]) => obj)
+        .filter((obj) => obj instanceof PDFDict && obj.get(PDFName.of("Type")) === PDFName.of("FontDescriptor") && /Noto/.test(String(obj.get(PDFName.of("FontName")))))
+        .map((obj) => obj as unknown as { get: (n: unknown) => unknown });
+      expect(subsets).toHaveLength(3);
+      for (const descriptor of subsets) {
+        const stream = doc.context.lookup(descriptor.get(PDFName.of("FontFile2")) as never) as unknown as { contents: Uint8Array };
+        expect(stream).toBeInstanceOf(PDFRawStream);
+        const font = fontkit.create(unzlibSync(stream.contents));
+        const drawn = Array.from({ length: font.numGlyphs }, (_, id) => (font.getGlyph(id).path as unknown as { commands: unknown[] }).commands.length);
+        // Glyph 0 is the "missing" box; every other glyph has an outline, except at most a space.
+        expect(drawn.slice(1).filter((n) => n === 0).length).toBeLessThanOrEqual(1);
+        expect(drawn.length).toBeGreaterThan(3);
+      }
+    });
+
+    it("reads Urdu back in typed order, including the lam-alef ligature and numbers", async () => {
+      const line = "سلام 123 دنیا";
+      const result = await applyEdits(fixture("sample-3-pages.pdf"), { texts: [{ ...base, page: 0, lines: [{ text: line, x: 60, y: 300 }] }], annotations: [] }, loadFont);
+      const items = (await pageText(result.bytes, 1)).map((t) => t.str);
+      expect(items).toEqual(expect.arrayContaining(["سلام", "123", "دنیا"]));
+    });
+
+    it("keeps Latin and Chinese together on one line, in order", async () => {
+      const line = "Invoice 发票 No. 42 已付款";
+      const result = await applyEdits(fixture("sample-3-pages.pdf"), { texts: [{ ...base, page: 0, lines: [{ text: line, x: 60, y: 300 }] }], annotations: [] }, loadFont);
+      expect(await joined(result.bytes)).toContain(squash(line));
+    });
+
+    it("uses bold Noto fonts for bold text", async () => {
+      const result = await applyEdits(
+        fixture("sample-3-pages.pdf"),
+        { texts: [{ ...base, bold: true, page: 0, lines: [{ text: "粗体 عريض", x: 60, y: 300 }] }], annotations: [] },
+        loadFont,
+      );
+      const fonts = (await pageText(result.bytes, 1)).map((t) => t.font).join(" ");
+      expect(await joined(result.bytes)).toContain("粗体");
+      expect(result.bytes.length).toBeGreaterThan(0);
+      expect(fonts).toBeTruthy();
+    });
+
+    it("says which characters can't be saved instead of writing empty boxes", async () => {
+      await expect(
+        applyEdits(fixture("sample-3-pages.pdf"), { texts: [{ ...base, page: 0, lines: [{ text: "Ethiopic ሰላም", x: 60, y: 300 }] }], annotations: [] }, loadFont),
+      ).rejects.toThrow("These characters can't be saved yet: ሰ ላ ም");
+    });
+
+    it("saves an existing line edited into Chinese", async () => {
+      const bytes = fixture("sample-3-pages.pdf").bytes;
+      const { PDFDocument } = await import("pdf-lib");
+      const { readPageText } = await import("../text-edit/lines");
+      const line = readPageText(await PDFDocument.load(bytes), 0).lines.find((l) => l.text === "Sample report")!;
+      const extract = async (b: Uint8Array, p: number) => (await pageText(b, p + 1)).map((t) => t.str);
+      const result = await applyEdits(
+        { name: "in.pdf", bytes },
+        { texts: [], annotations: [], lineEdits: [{ page: 0, lineId: line.id, text: "样本报告", original: line.text }] },
+        loadFont,
+        extract,
+      );
+      expect(result.fontFallbacks).toBe(1);
+      const text = await joined(result.bytes);
+      expect(text).toContain("样本报告");
+      expect(text).not.toContain("Samplereport");
+    });
   });
 
   it("keeps text upright on a rotated page when rotated to match", async () => {
