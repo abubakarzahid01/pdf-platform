@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import { site } from "@/config/site";
+import { homeSeo } from "@/config/seo";
 import "./globals.css";
 
 const inter = Inter({
@@ -17,8 +18,13 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
-  title: `${site.name} — ${site.tagline}`,
-  description: site.description,
+  title: homeSeo.title,
+  description: homeSeo.description,
+  applicationName: site.name,
+  // Shared defaults for link previews; pages set their own title, description and URL.
+  openGraph: { type: "website", siteName: site.name, locale: "en_GB" },
+  twitter: { card: "summary_large_image" },
+  formatDetection: { telephone: false },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
